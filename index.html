@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PureTidings Web - News Intelligence</title>
+    <link rel="stylesheet" href="feedpage.css">
+    <link rel="stylesheet" href="dark-theme.css">
+    <link rel="stylesheet" href="options.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary-orange: #ff9800;
+            --dark-bg: #121212;
+        }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        
+        /* Auth Styles */
+        #auth-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--dark-bg); color: white;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        #login-card {
+            background: #1e1e1e; padding: 40px; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-width: 400px; width: 90%;
+        }
+        #login-card img { width: 80px; margin-bottom: 20px; }
+        #login-card h1 { margin: 0 0 10px 0; color: var(--primary-orange); }
+        #login-card input {
+            width: 100%; padding: 12px; margin: 20px 0;
+            background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 6px;
+        }
+        #login-card button {
+            width: 100%; padding: 12px; background: var(--primary-orange);
+            border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer;
+        }
+        #login-card .status { margin-top: 15px; font-size: 14px; color: #aaa; }
+
+        /* App Container */
+        #app-container { display: none; height: 100vh; flex-direction: column; }
+        .hidden { display: none !important; }
+        
+        #web-header {
+            background: #1e1e1e; padding: 10px 20px; display: flex;
+            justify-content: space-between; align-items: center; border-bottom: 1px solid #333;
+        }
+        .pro-badge {
+            background: linear-gradient(45deg, #ffd700, #ffae00);
+            color: black; padding: 2px 8px; border-radius: 4px;
+            font-size: 11px; font-weight: bold; margin-left: 10px;
+        }
+        #upgrade-banner {
+            background: #ff980022; color: #ff9800; padding: 8px;
+            text-align: center; font-size: 14px; border-bottom: 1px solid #ff980044;
+        }
+        #upgrade-banner a { color: #ff9800; font-weight: bold; text-decoration: underline; }
+    </style>
+</head>
+<body class="dark-mode"> <!-- Wir starten direkt im Dark Mode -->
+
+    <!-- Login Screen -->
+    <div id="auth-overlay">
+        <div id="login-card">
+            <img src="128.png" alt="PureTidings">
+            <h1>PureTidings</h1>
+            <p>Intelligence in your Pocket.</p>
+            <input type="email" id="email-input" placeholder="E-Mail Adresse">
+            <button id="login-btn">Magic Link senden</button>
+            <div id="auth-status" class="status"></div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app-container">
+        <div id="upgrade-banner" class="hidden">
+            🎉 Hol dir <b>PureTidings Pro</b> für unbegrenzte AI-Summaries und mehr! 
+            <a href="https://buy.polar.sh/polar_cl_hyHl1QpZkQfPWmUapDe4fshQi2MJzxfcLwPjE2AIaLr">Jetzt upgraden</a>
+        </div>
+        
+        <header id="web-header">
+            <div style="display: flex; align-items: center;">
+                <img src="48.png" style="width: 24px; margin-right: 10px;">
+                <strong>PureTidings</strong>
+                <span id="user-badge"></span>
+            </div>
+            <div>
+                <button id="logout-btn" class="btn-secondary" style="padding: 5px 10px; font-size: 12px;">Logout</button>
+            </div>
+        </header>
+
+        <!-- Wir nutzen dein bestehendes Layout -->
+        <div id="main-layout" style="display: flex; flex: 1; overflow: hidden;">
+            <div id="sidebar" style="width: 300px; border-right: 1px solid #333; overflow-y: auto;">
+                <div id="feed-tree-container"></div>
+            </div>
+            <div id="content-area" style="flex: 1; overflow-y: auto; position: relative;">
+                <div id="posts-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

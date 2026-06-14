@@ -1,0 +1,270 @@
+/* Dark Theme for PureTidings */
+
+.dark-mode {
+  --bg-color: #202124;
+  --body-bg: #1a1b1c;
+  --text-color: #e8eaed;
+  --text-color-darker: #a0a0a0;
+  --primary-color: #8ab4f8;
+  --secondary-color: #2d2e30;
+  --border-color: #3c4043;
+  --hover-bg: #383a3d;
+  --active-bg: #414347; /* Definiert für aktiven Menüpunkt */
+  --secondary-text-color: #969ba1;
+  --button-bg-color: #3c4043;
+  --button-hover-bg-color: #4a4a4a;
+  --edit-button-bg-color: #3c5c8b;
+  --edit-button-hover-bg-color: #4e6e9e;
+  --delete-bg-color: #5c2a2a;
+  --delete-hover-bg-color: #7c3a3a;
+  --input-bg: #252525;
+  --input-color: #e8eaed;
+  --link-color: #8ab4f8;
+  --visited-link-color: #c58af9;
+  --unread-indicator-color: var(--primary-color);
+  --header-bg: #2d2e30;
+}
+
+.dark-mode {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+/* Generelle Anpassungen */
+.dark-mode h1, .dark-mode h2 {
+  color: var(--text-color);
+  border-bottom-color: var(--border-color);
+}
+
+.dark-mode a {
+  color: var(--link-color);
+}
+
+.dark-mode .tree-node-content:hover .tree-node-title {
+  color: var(--text-color-darker);
+}
+
+/* Spezifische Anpassungen für feedpage.html */
+.dark-mode header {
+  background-color: var(--header-bg);
+  color: var(--text-color);
+  border-bottom-color: var(--border-color);
+}
+
+
+.dark-mode .sidebar-nav a {
+  color: #5F85BB; /* Dunklerer, aber gut sichtbarer Blauton für Standardlinks */
+}
+
+.dark-mode .sidebar-nav a:hover {
+  background-color: var(--hover-bg);
+  color: var(--primary-color); /* Helles Blau beim Hover */
+}
+
+.dark-mode .sidebar-nav a.active {
+  background-color: var(--active-bg);
+  color: var(--text-color); /* Helle Haupttextfarbe für maximalen Kontrast */
+}
+.dark-mode #posts-container .post-item {
+  background-color: var(--secondary-color);
+  border-bottom: 1px solid #555; /* Etwas hellerer Rahmen */
+  border-left: 4px solid var(--secondary-color); /* Rahmen in Hintergrundfarbe */
+}
+.dark-mode #posts-container .post-item:hover {
+  background-color: var(--hover-bg-color);
+}
+.dark-mode #posts-container .post-item.read {
+  background-color: transparent;
+}
+.dark-mode #posts-container .post-item.keyword-match {
+  border-left-color: var(--primary-color);
+}
+.dark-mode .post-title {
+  color: var(--text-color);
+}
+.dark-mode .post-item.read .post-title {
+  color: var(--secondary-text-color);
+}
+.dark-mode .post-date {
+  color: var(--secondary-text-color);
+}
+
+/* Spezifische Hover-Farbe für Feed-Auswahl im Popup */
+.dark-mode .select-options li:hover {
+  background-color: var(--hover-bg-color);
+}
+
+
+/* Allgemeine Container-Anpassungen */
+.dark-mode .container,
+.dark-mode .post-item,
+.dark-mode .feed-item-row,
+.dark-mode .folder-header {
+  background-color: var(--secondary-color);
+  border: 1px solid var(--border-color);
+}
+
+.dark-mode .post-item:hover,
+.dark-mode .feed-item-row:hover {
+  background-color: var(--hover-bg-color);
+}
+
+.dark-mode .post-title a {
+  color: var(--link-color);
+}
+
+.dark-mode .post-title a:visited {
+  color: var(--visited-link-color);
+}
+
+.dark-mode .post-meta,
+.dark-mode .feed-url {
+  color: #b0b0b0; /* Helleres Grau für bessere Sichtbarkeit */
+}
+
+/* Favicon-Anpassung für Dark Mode */
+.dark-mode .feed-favicon {
+  filter: brightness(1.5); /* Macht Favicons heller */
+}
+
+/* Button-Anpassungen */
+.dark-mode button,
+.dark-mode .button,
+.dark-mode input[type="submit"] {
+  background-color: var(--button-bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.dark-mode button:hover,
+.dark-mode .button:hover,
+.dark-mode input[type="submit"]:hover {
+  background-color: var(--button-hover-bg-color);
+}
+
+/* Spezifische Anpassung für Stern- und Lese-Modus-Symbole */
+.dark-mode .post-actions .favorite-btn,
+.dark-mode .post-actions .read-mode-btn {
+  color: var(--primary-color) !important; /* Nutzt die hellere Primärfarbe und erzwingt sie */
+}
+
+/* Behält die Farbe für bereits favorisierte Sterne bei */
+.dark-mode .post-actions .favorite-btn.favorited {
+  color: var(--star-color) !important;
+}
+
+.dark-mode button.edit-btn {
+  background-color: var(--edit-button-bg-color);
+}
+.dark-mode button.edit-btn:hover {
+  background-color: var(--edit-button-hover-bg-color);
+}
+
+.dark-mode button.delete-btn,
+.dark-mode .delete-btn {
+  background-color: var(--delete-bg-color);
+}
+.dark-mode button.delete-btn:hover,
+.dark-mode .delete-btn:hover {
+  background-color: var(--delete-hover-bg-color);
+}
+
+/* Input-Anpassungen */
+.dark-mode input[type="text"],
+.dark-mode input[type="url"],
+.dark-mode input[type="search"],
+.dark-mode input[type="number"],
+.dark-mode input[type="time"],
+.dark-mode textarea,
+.dark-mode select {
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  color-scheme: dark;
+}
+
+/* Unread-Indikator */
+.dark-mode .unread-count {
+  color: var(--text-color); /* Helle Textfarbe für bessere Lesbarkeit im Dark Mode */
+}
+
+.dark-mode .post.unread .post-title a {
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+.dark-mode .post.unread::before {
+  background-color: var(--unread-indicator-color);
+}
+
+/* Reader Mode Dark Theme */
+.dark-mode {
+  background-color: var(--bg-color); /* Sicherstellen, dass der Body auch dunkel ist */
+}
+
+.dark-mode .reader-container {
+  background-color: var(--secondary-color); /* Nutzt die globale secondary-color */
+  color: var(--text-color);
+}
+
+.dark-mode .reader-container h1 {
+   color: var(--text-color);
+}
+
+.dark-mode .reader-container a {
+  color: var(--link-color);
+}
+
+/* Tabs Integration for Options Page */
+.dark-mode .tabs-nav {
+  border-bottom-color: var(--border-color);
+}
+.dark-mode .tab-btn {
+  background-color: #2d2e30;
+  border-color: var(--border-color);
+  color: var(--text-color);
+  opacity: 0.8;
+}
+.dark-mode .tab-btn:hover {
+  background-color: var(--hover-bg);
+  opacity: 1;
+}
+.dark-mode .tab-btn.active {
+  background-color: var(--bg-color);
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+.dark-mode .tab-btn.active::after {
+    background: var(--bg-color);
+}
+
+/* Dark Mode Footer Icons */
+.dark-mode #refresh-button {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z'/%3E%3C/svg%3E");
+}
+.dark-mode #settings-button {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61-.25-1.17-.59-1.69-.98l-2.49-1c-.23-.08-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19-.15-.24-.42-.12-.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69-.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z'/%3E%3C/svg%3E");
+}
+.dark-mode #scan-page-button {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-7 7H3v4c0 1.1.9 2 2 2h4v-2H5v-4zM5 3h4v2H5v4H3V5c0-1.1.9-2 2-2zm14 0h-4v2h4v4h2V5c0-1.1-.9-2-2-2zm0 16h-4v2h4c1.1 0 2-.9 2-2v-4h-2v4z'/%3E%3C/svg%3E");
+}
+.dark-mode #open-keywords-page {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E");
+}
+.dark-mode #open-favorites-page {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27z'/%3E%3C/svg%3E");
+}
+.dark-mode #open-full-page {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zm0-8h14V7H7v2z'/%3E%3C/svg%3E");
+}
+.dark-mode #mark-all-read {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z'/%3E%3C/svg%3E");
+}
+.dark-mode #mark-all-unread {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.23 3.2-2 5.12-2 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z'/%3E%3C/svg%3E");
+}
+
+.dark-mode #sidebar-settings-btn {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238AB4F8'%3E%3Cpath d='M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61-.25-1.17-.59-1.69-.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19-.15-.24-.42-.12-.64l2 3.46c.12-.22.39.3.61-.22l2.49-1c.52.4 1.08.73 1.69-.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2 3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z'/%3E%3C/svg%3E");
+}
+
