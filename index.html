@@ -7,100 +7,194 @@
     <link rel="stylesheet" href="feedpage.css">
     <link rel="stylesheet" href="dark-theme.css">
     <link rel="stylesheet" href="options.css">
+    <!-- WICHTIG: Supabase CDN Link -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="Readability.js"></script>
     <style>
-        :root {
-            --primary-orange: #ff9800;
-            --dark-bg: #121212;
-        }
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        
-        /* Auth Styles */
+        :root { --primary-orange: #ff9800; --dark-bg: #121212; }
+        body { margin: 0; font-family: sans-serif; background: var(--dark-bg); color: white; }
         #auth-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--dark-bg); color: white;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 1000;
+            background: var(--dark-bg); display: flex; align-items: center; justify-content: center; z-index: 1000;
         }
-        #login-card {
-            background: #1e1e1e; padding: 40px; border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; max-width: 400px; width: 90%;
-        }
-        #login-card img { width: 80px; margin-bottom: 20px; }
-        #login-card h1 { margin: 0 0 10px 0; color: var(--primary-orange); }
-        #login-card input {
-            width: 100%; padding: 12px; margin: 20px 0;
-            background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 6px;
-        }
-        #login-card button {
-            width: 100%; padding: 12px; background: var(--primary-orange);
-            border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer;
-        }
-        #login-card .status { margin-top: 15px; font-size: 14px; color: #aaa; }
-
-        /* App Container */
+        #login-card { background: #1e1e1e; padding: 40px; border-radius: 12px; text-align: center; width: 90%; max-width: 400px; }
+        #login-card input { width: 100%; padding: 12px; margin: 20px 0; background: #2c2c2c; border: 1px solid #444; color: white; border-radius: 6px; box-sizing: border-box; }
+        #login-card button { width: 100%; padding: 12px; background: var(--primary-orange); border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; }
         #app-container { display: none; height: 100vh; flex-direction: column; }
+        #web-header { background: #1e1e1e; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
         .hidden { display: none !important; }
+        .pro-badge { background: gold; color: black; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-left: 8px; }
+
+        /* Reader Mode Styles */
+        #reader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 2000; display: none;
+            overflow-y: auto; padding: 40px 20px; box-sizing: border-box;
+        }
+        #reader-content {
+            background: #1e1e1e; max-width: 800px; margin: 0 auto;
+            padding: 40px; border-radius: 12px; line-height: 1.6; color: #eee;
+            position: relative;
+        }
+        #reader-close {
+            position: absolute; top: 0; right: -50px; background: #333;
+            color: white; border: 1px solid #444; width: 40px; height: 40px; 
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; font-size: 24px; z-index: 2001;
+        }
+        /* Mobile Anpassung: Button oben rechts IN die Karte */
+        @media (max-width: 900px) {
+            #reader-close { right: 10px; top: 10px; background: rgba(0,0,0,0.5); }
+        }
+        #reader-content h1 { color: var(--primary-orange); margin-top: 0; }
+        #reader-content img { max-width: 100%; height: auto; border-radius: 8px; }
+
+        /* Spinner Animation */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            width: 36px;
+            height: 40px;
+            border-radius: 50%;
+            border-left-color: var(--primary-orange);
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Kompakte Artikelliste Styles */
+        .post-row {
+            display: flex;
+            padding: 10px 15px;
+            border-bottom: 1px solid #2a2a2a;
+            gap: 15px;
+            align-items: center;
+            transition: background 0.1s;
+            background: #181818;
+        }
+        .post-row:hover { background: #222; }
         
-        #web-header {
-            background: #1e1e1e; padding: 10px 20px; display: flex;
-            justify-content: space-between; align-items: center; border-bottom: 1px solid #333;
+        .post-thumbnail {
+            width: 80px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+            background: #111;
+            flex-shrink: 0;
+            border: 1px solid #333;
         }
-        .pro-badge {
-            background: linear-gradient(45deg, #ffd700, #ffae00);
-            color: black; padding: 2px 8px; border-radius: 4px;
-            font-size: 11px; font-weight: bold; margin-left: 10px;
+        
+        .post-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
-        #upgrade-banner {
-            background: #ff980022; color: #ff9800; padding: 8px;
-            text-align: center; font-size: 14px; border-bottom: 1px solid #ff980044;
+        
+        .post-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #eee;
+            margin: 0 0 2px 0;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
         }
-        #upgrade-banner a { color: #ff9800; font-weight: bold; text-decoration: underline; }
+        .post-title:hover { color: var(--primary-orange); }
+        
+        .post-meta {
+            font-size: 11px;
+            color: #777;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .post-actions {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .action-btn {
+            background: #2a2a2a;
+            border: 1px solid #3d3d3d;
+            color: #fff !important; /* IMMER HELL */
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            opacity: 0.8;
+        }
+        .action-btn:hover { 
+            background: #444;
+            border-color: var(--primary-orange);
+            opacity: 1;
+        }
+
+        .feed-header {
+            background: #252525;
+            padding: 8px 15px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #aaa;
+            border-bottom: 1px solid #333;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
-<body class="dark-mode"> <!-- Wir starten direkt im Dark Mode -->
+<body class="dark-mode">
 
-    <!-- Login Screen -->
     <div id="auth-overlay">
         <div id="login-card">
-            <img src="128.png" alt="PureTidings">
+            <img src="128.png" style="width: 64px; margin-bottom: 20px;">
             <h1>PureTidings</h1>
-            <p>Intelligence in your Pocket.</p>
-            <input type="email" id="email-input" placeholder="E-Mail Adresse">
-            <button id="login-btn">Magic Link senden</button>
-            <div id="auth-status" class="status"></div>
+            <input type="email" id="email-input" placeholder="Deine E-Mail">
+            <input type="password" id="password-input" placeholder="Passwort (optional für E-Mail Link)">
+            <button id="login-btn">Login / Magic Link</button>
+            <div id="auth-status" style="margin-top:15px; font-size:14px; color:#aaa;"></div>
         </div>
     </div>
 
-    <!-- Main App -->
-    <div id="app-container">
-        <div id="upgrade-banner" class="hidden">
-            🎉 Hol dir <b>PureTidings Pro</b> für unbegrenzte AI-Summaries und mehr! 
-            <a href="https://buy.polar.sh/polar_cl_hyHl1QpZkQfPWmUapDe4fshQi2MJzxfcLwPjE2AIaLr">Jetzt upgraden</a>
-        </div>
-        
-        <header id="web-header">
-            <div style="display: flex; align-items: center;">
-                <img src="48.png" style="width: 24px; margin-right: 10px;">
-                <strong>PureTidings</strong>
-                <span id="user-badge"></span>
+    <div id="reader-overlay">
+        <div id="reader-wrapper" style="position: relative; max-width: 800px; margin: 0 auto; width: 90%;">
+            <button id="reader-close" onclick="closeReader()">&times;</button>
+            <div id="reader-content">
+                <div id="reader-loading">Lade Artikel...</div>
+                <div id="reader-body"></div>
             </div>
-            <div>
-                <button id="logout-btn" class="btn-secondary" style="padding: 5px 10px; font-size: 12px;">Logout</button>
+        </div>
+    </div>
+
+    <div id="app-container">
+        <header id="web-header">
+            <div style="display:flex; align-items:center;">
+                <strong>PureTidings</strong>
+                <div id="user-badge" style="margin-left:15px; font-size:13px; color:#aaa;"></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:15px;">
+                <a href="https://buy.polar.sh/polar_cl_hyHl1QpZkQfPWmUapDe4fshQi2MJzxfcLwPjE2AIaLr" id="upgrade-btn" class="hidden" style="color:gold; font-size:12px; text-decoration:none; border:1px solid gold; padding:4px 8px; border-radius:4px;">Upgrade Pro</a>
+                <button id="logout-btn" style="background:transparent; border:1px solid #444; color:#ccc; cursor:pointer; padding:4px 10px; border-radius:4px;">Logout</button>
             </div>
         </header>
 
-        <!-- Wir nutzen dein bestehendes Layout -->
-        <div id="main-layout" style="display: flex; flex: 1; overflow: hidden;">
-            <div id="sidebar" style="width: 300px; border-right: 1px solid #333; overflow-y: auto;">
-                <div id="feed-tree-container"></div>
-            </div>
-            <div id="content-area" style="flex: 1; overflow-y: auto; position: relative;">
-                <div id="posts-container"></div>
-            </div>
+        <div style="display:flex; flex:1; overflow:hidden;">
+            <div id="feed-tree-container" style="width:250px; border-right:1px solid #333; overflow-y:auto; background:#181818;"></div>
+            <div id="posts-container" style="flex:1; overflow-y:auto;"></div>
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=1.1"></script>
 </body>
 </html>
