@@ -560,9 +560,9 @@ async function markFeedAsUnread(feedUrl) {
     if (changed) {
         const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
         if (countEl) {
-            let count = parseInt(countEl.innerText) || 0;
-            countEl.innerText = count + unreadCountAdded;
-            countEl.style.display = 'inline-block';
+            countEl.innerText = unreadCountAdded;
+            countEl.style.setProperty('display', 'inline-block', 'important');
+            countEl.style.backgroundColor = '#4a90e2';
         }
 
         try {
