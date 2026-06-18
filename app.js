@@ -292,7 +292,10 @@ async function loadFeedPosts(url, feedName = '') {
         const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
         const items = xml.querySelectorAll('item, entry');
-        container.innerHTML = `<div class="feed-header">${feedName || 'Feed'}</div>`;
+        container.innerHTML = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>${feedName || 'Feed'}</span>
+            <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
+        </div>`;
         
         items.forEach(item => {
             const title = item.querySelector('title')?.textContent || 'Kein Titel';
@@ -301,38 +304,21 @@ async function loadFeedPosts(url, feedName = '') {
             const encoded = item.querySelector('encoded')?.textContent || '';
             const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
             
-            // --- Erweiterte Thumbnail Extraktion ---
+            // --- Thumbnail Extraction ---
             let thumbnail = '';
-            
-            // 1. YouTube
             const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
             if (ytId) thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
-            
-            // 2. Media Tags (media:content, media:thumbnail)
             if (!thumbnail) {
                 const mediaContent = item.getElementsByTagName('media:content')[0] || item.getElementsByTagName('content')[0];
-                if (mediaContent && mediaContent.getAttribute('url')) {
-                    thumbnail = mediaContent.getAttribute('url');
-                } else {
-                    const mediaThumb = item.getElementsByTagName('media:thumbnail')[0] || item.getElementsByTagName('thumbnail')[0];
-                    if (mediaThumb && mediaThumb.getAttribute('url')) thumbnail = mediaThumb.getAttribute('url');
-                }
-            }
-            
-            // 3. Enclosure (für Podcasts oder einige RSS Feeds)
-            if (!thumbnail) {
-                const enclosure = item.querySelector('enclosure[type^="image/"]');
-                if (enclosure) thumbnail = enclosure.getAttribute('url');
-            }
-            
-            // 4. Extraktion aus dem Content/Beschreibung (Regex Suche nach <img>)
-            if (!thumbnail) {
+                if (mediaContent && mediaContent.getAttribute('url')) thumbnail = mediaContent.getAttribute('url');
                 const fullText = desc + encoded;
                 const imgMatch = fullText.match(/<img[^>]+src="([^">]+)"/i);
                 if (imgMatch && imgMatch[1]) thumbnail = imgMatch[1];
             }
 
-            const row = document.createElement('div'); row.className = 'post-row';
+            const row = document.createElement('div'); 
+            row.className = 'post-row';
+            row.dataset.link = link;
             const isRead = userData.read_links.includes(link);
             const isFav = userData.favorited_links.includes(link);
             if (isRead) row.style.opacity = '0.5';
@@ -349,9 +335,10 @@ async function loadFeedPosts(url, feedName = '') {
                     </div>
                 </div>
                 <div class="post-actions" style="display:flex; gap:5px;">
-                    <button class="action-btn fav-btn" title="Zu Favoriten hinzufügen/entfernen" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                    <button class="action-btn reader-btn" title="Im Reader-Modus lesen">👓</button>
-                    <a href="${link}" target="_blank" class="action-btn" title="Original-Seite öffnen" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
+                    <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
+                    <button class="action-btn reader-btn" title="Reader">👓</button>
+                    <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
+                    <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
                 </div>
             `;
             
@@ -359,10 +346,13 @@ async function loadFeedPosts(url, feedName = '') {
                 e.preventDefault(); e.stopPropagation();
                 toggleFavorite(link, row.querySelector('.fav-btn'));
             };
-
             row.querySelector('.reader-btn').onclick = (e) => {
                 e.preventDefault(); e.stopPropagation();
                 openReader({title, link, desc: desc+encoded, thumbnail});
+            };
+            row.querySelector('.unread-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                markAsUnread(link, row);
             };
 
             container.appendChild(row);
@@ -370,16 +360,62 @@ async function loadFeedPosts(url, feedName = '') {
     } catch (e) { container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; }
 }
 
+async function markFeedAsRead(feedUrl) {
+    const rows = document.querySelectorAll('.post-row');
+    let changed = false;
+    rows.forEach(row => {
+        const link = row.dataset.link;
+        if (link && !userData.read_links.includes(link)) {
+            userData.read_links.push(link);
+            row.style.opacity = '0.5';
+            row.querySelector('.post-title').style.fontWeight = 'normal';
+            row.querySelector('.unread-btn').style.display = 'flex';
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        // Sidebar Zähler auf 0 setzen
+        const activeFeedRow = document.querySelector('.sidebar-item-row[style*="background"]');
+        const countEl = activeFeedRow ? activeFeedRow.querySelector('.unread-count') : null;
+        if (countEl) countEl.style.display = 'none';
+
+        try {
+            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+        } catch (e) { console.error("Sync Mark Feed As Read Error:", e); }
+    }
+}
+
+async function markAsUnread(link, row) {
+    userData.read_links = userData.read_links.filter(l => l !== link);
+    row.style.opacity = '1';
+    row.querySelector('.post-title').style.fontWeight = '600';
+    row.querySelector('.unread-btn').style.display = 'none';
+
+    // Counter in Sidebar wieder erhöhen
+    const activeFeedRow = document.querySelector('.sidebar-item-row[style*="background"]');
+    const countEl = activeFeedRow ? activeFeedRow.querySelector('.unread-count') : null;
+    if (countEl) {
+        let count = parseInt(countEl.innerText) || 0;
+        countEl.innerText = count + 1;
+        countEl.style.display = 'inline-block';
+    }
+
+    try {
+        await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+    } catch (e) { console.error("Sync Mark As Unread Error:", e); }
+}
+
 async function toggleFavorite(link, btn) {
     const isFav = userData.favorited_links.includes(link);
     if (isFav) {
         userData.favorited_links = userData.favorited_links.filter(l => l !== link);
         btn.innerText = '☆';
-        btn.style.color = 'white !important';
+        btn.style.setProperty('color', 'white', 'important');
     } else {
         userData.favorited_links.push(link);
         btn.innerText = '★';
-        btn.style.color = 'gold !important';
+        btn.style.setProperty('color', 'gold', 'important');
     }
 
     try {
@@ -416,7 +452,6 @@ async function openReader(post) {
 
     const innerContent = body.querySelector('#reader-inner-content');
 
-    // YouTube Sonderbehandlung: Kein Fetch nötig, wir zeigen direkt das Vorschaubild/Embed-Ersatz
     if (isYouTube) {
         let ytId = '';
         try {
@@ -431,7 +466,8 @@ async function openReader(post) {
                     <img src="https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;" onerror="this.src='https://i.ytimg.com/vi/${ytId}/mqdefault.jpg'">
                     <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:40px; border:2px solid white;">▶</div>
                 </div>
-                <p style="text-align:center; color:#888; font-size:14px;">Klicke auf das Vorschaubild, um das Video auf YouTube zu starten.</p>
+                <div style="margin-top:20px; color:#ccc; font-size:15px; line-height:1.6; white-space:pre-wrap;">${post.desc || 'Keine Beschreibung verfügbar.'}</div>
+                <p style="text-align:center; color:#555; font-size:13px; margin-top:30px;">Klicke auf das Vorschaubild, um das Video auf YouTube zu starten.</p>
             `;
             return;
         }
