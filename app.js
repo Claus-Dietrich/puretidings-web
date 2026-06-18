@@ -534,27 +534,36 @@ async function markAsRead(link) {
     if (!userData.read_links.includes(link)) {
         userData.read_links.push(link);
         
-        // 1. UI Update in der Liste: Fade Row
+        // 1. UI Update in der Liste: Fade Row + Show Unread Button
         const rows = document.querySelectorAll('.post-row');
         rows.forEach(row => {
-            if (row.innerHTML.includes(link)) {
+            if (row.dataset.link === link) {
                 row.style.opacity = '0.5';
                 const title = row.querySelector('.post-title');
                 if (title) title.style.fontWeight = 'normal';
+                
+                const unreadBtn = row.querySelector('.unread-btn');
+                if (unreadBtn) unreadBtn.style.display = 'flex';
             }
         });
 
         // 2. Echtzeit-Counter Dekrementierung in der Sidebar
-        const activeFeedRow = document.querySelector('.sidebar-item-row[style*="background"]'); // Naive Suche nach dem aktiven Feed
-        const countEl = activeFeedRow ? activeFeedRow.querySelector('.unread-count') : null;
-        if (countEl) {
-            let count = parseInt(countEl.innerText) || 0;
-            if (count > 0) {
-                count--;
-                countEl.innerText = count;
-                if (count === 0) countEl.style.display = 'none';
+        // Wir suchen das Sidebar-Element anhand des aktiven Feed-Zustands oder der ID, falls bekannt
+        const sidebarItems = document.querySelectorAll('.sidebar-item-row');
+        sidebarItems.forEach(sRow => {
+            // Wenn der Feed gerade aktiv ist (Hintergrund-Check) dekrementieren wir
+            if (sRow.style.background.includes('rgb') || sRow.classList.contains('active')) {
+                const countEl = sRow.querySelector('.unread-count');
+                if (countEl) {
+                    let count = parseInt(countEl.innerText) || 0;
+                    if (count > 0) {
+                        count--;
+                        countEl.innerText = count;
+                        if (count === 0) countEl.style.display = 'none';
+                    }
+                }
             }
-        }
+        });
 
         // Sync to Supabase
         try {
