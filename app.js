@@ -259,7 +259,14 @@ async function calculateAllUnreadCounts() {
             const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: feed.url }) });
             if (!res.ok) continue;
             const xmlStr = await res.text();
-            const xml = new DOMParser().parseFromString(xmlStr, "text/xml");
+            let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
+
+            // Check for parsing errors and apply fallback strategies
+            let parseError = xml.getElementsByTagName("parsererror");
+            if (parseError.length > 0) {
+                console.warn("XML parse error in count, trying text/html fallback.", parseError[0].textContent);
+                xml = new DOMParser().parseFromString(xmlStr, "text/html");
+            }
             
             // YouTube (Atom) nutzt 'entry', normales RSS nutzt 'item'
             const items = xml.querySelectorAll('item, entry');
@@ -324,7 +331,16 @@ async function loadFeedPosts(url, feedName = '') {
 
     try {
         const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-        const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+        const xmlStr = await res.text();
+        let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
+        
+        // Check for parsing errors and apply fallback strategies
+        let parseError = xml.getElementsByTagName("parsererror");
+        if (parseError.length > 0) {
+            console.warn("XML parse error, trying text/html fallback.", parseError[0].textContent);
+            xml = new DOMParser().parseFromString(xmlStr, "text/html");
+        }
+
         const items = xml.querySelectorAll('item, entry');
         container.innerHTML = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span>${feedName || 'Feed'}</span>
