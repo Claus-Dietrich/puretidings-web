@@ -380,7 +380,7 @@ async function loadFeedPosts(url, feedName = '') {
                 </div>
                 <div class="post-actions" style="display:flex; gap:5px;">
                     <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="color:${isSum ? '#ff9800' : 'white'} !important">${isSum ? '🧡' : '📝'}</button>
+                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="color:${isSum ? '#28a745' : 'white'} !important">📝</button>
                     <button class="action-btn reader-btn" title="Reader">👓</button>
                     <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
                     <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
@@ -506,15 +506,14 @@ async function toggleFavorite(link, btn) {
 }
 
 async function toggleSummary(link, btn) {
+    if (!userData.summary_links) userData.summary_links = [];
     const isSum = userData.summary_links.includes(link);
     if (isSum) {
         userData.summary_links = userData.summary_links.filter(l => l !== link);
-        btn.innerText = '📝';
         btn.style.setProperty('color', 'white', 'important');
     } else {
         userData.summary_links.push(link);
-        btn.innerText = '🧡';
-        btn.style.setProperty('color', '#ff9800', 'important');
+        btn.style.setProperty('color', '#28a745', 'important');
     }
 
     try {
