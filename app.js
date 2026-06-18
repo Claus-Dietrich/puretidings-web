@@ -302,7 +302,8 @@ async function calculateAllUnreadCounts() {
             if (countEl) {
                 if (unread > 0) {
                     countEl.innerText = unread;
-                    countEl.style.display = 'inline-block';
+                    countEl.style.setProperty('display', 'inline-block', 'important');
+                    countEl.style.backgroundColor = '#4a90e2';
                 } else {
                     countEl.style.display = 'none';
                 }
