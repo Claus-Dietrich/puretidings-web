@@ -254,6 +254,9 @@ async function calculateAllUnreadCounts() {
     function walk(nodes) { nodes.forEach(n => { if (n.type === 'feed' && n.url) feeds.push(n); if (n.children) walk(n.children); }); }
     walk(userData.feed_tree);
 
+    // Warten, bis die Sidebar sicher gerendert ist
+    await new Promise(r => setTimeout(r, 500)); 
+
     for (const feed of feeds) {
         try {
             const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: feed.url }) });
