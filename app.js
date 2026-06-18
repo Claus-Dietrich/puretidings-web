@@ -356,9 +356,20 @@ async function loadFeedPosts(url, feedName = '') {
             } else {
                 const mediaContent = item.getElementsByTagName('media:content')[0] || item.getElementsByTagName('content')[0];
                 if (mediaContent && mediaContent.getAttribute('url')) thumbnail = mediaContent.getAttribute('url');
-                const fullText = desc + encoded;
-                const imgMatch = fullText.match(/<img[^>]+src="([^">]+)"/i);
-                if (imgMatch && imgMatch[1]) thumbnail = imgMatch[1];
+                
+                if (!thumbnail) {
+                    const fullText = desc + encoded;
+                    // Suche nach allen img-Tags, nicht nur dem ersten
+                    const imgMatches = fullText.matchAll(/<img[^>]+src="([^">]+)"/gi);
+                    for (const match of imgMatches) {
+                        const imgUrl = match[1];
+                        // Überspringe typische Tracking-Pixel (häufig bei Substack & Newslettern)
+                        if (!imgUrl.includes('1x1') && !imgUrl.includes('tracking') && !imgUrl.endsWith('.gif') && imgUrl.startsWith('http')) {
+                            thumbnail = imgUrl;
+                            break;
+                        }
+                    }
+                }
                 durationStr = `${calculateReadingTime(desc+encoded)} min read`;
             }
 
