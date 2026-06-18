@@ -730,7 +730,15 @@ async function openReader(post) {
     }
 
     try {
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: post.link }) });
+        const { data: { session } } = await db.auth.getSession();
+        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`
+            }, 
+            body: JSON.stringify({ url: post.link }) 
+        });
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, "text/html");
         
