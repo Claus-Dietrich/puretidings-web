@@ -383,7 +383,7 @@ async function loadFeedPosts(url, feedName = '') {
                 </div>
                 <div class="post-actions" style="display:flex; gap:5px;">
                     <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="color:${isSum ? '#28a745' : 'white'} !important; border:none; background:none; cursor:pointer; font-size:18px;">${isSum ? '✔' : '📋'}</button>
+                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
                     <button class="action-btn reader-btn" title="Reader">👓</button>
                     <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
                     <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
@@ -547,7 +547,6 @@ async function toggleSummary(link, btn) {
         btn.style.setProperty('filter', 'grayscale(1)', 'important');
     } else {
         userData.summary_links.push(link);
-        // Sepia/Hue-Rotate erzeugt einen Grünton (hue-rotate(90deg))
         btn.style.setProperty('filter', 'sepia(1) saturate(5) hue-rotate(90deg)', 'important');
     }
 
