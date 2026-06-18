@@ -275,22 +275,27 @@ async function calculateAllUnreadCounts() {
 
             // Check for parsing errors and apply fallback strategies
             let parseError = xml.getElementsByTagName("parsererror");
+            let items = [];
             if (parseError.length > 0) {
-                console.warn("XML parse error in count, trying text/html fallback.", parseError[0].textContent);
+                console.warn("XML parse error in count, trying text/html fallback for:", feed.url);
                 xml = new DOMParser().parseFromString(xmlStr, "text/html");
+                items = xml.querySelectorAll('item, entry, a[href]'); // Fallback für HTML
+            } else {
+                items = xml.querySelectorAll('item, entry');
             }
             
-            // YouTube (Atom) nutzt 'entry', normales RSS nutzt 'item'
-            const items = xml.querySelectorAll('item, entry');
             let unread = 0;
             items.forEach(item => {
-                let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href');
+                let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || item.getAttribute('href');
                 if (!link || link === '') {
                     const altLink = item.querySelector('link[rel="alternate"]');
                     if (altLink) link = altLink.getAttribute('href');
                 }
-                if (link && !userData.read_links.includes(link)) unread++;
+                // Bei HTML-Fallback: Filtere nach relevanten RSS-ähnlichen Links
+                if (link && !userData.read_links.includes(link) && (link.startsWith('http') || link.startsWith('/'))) unread++;
             });
+            
+            console.log(`Feed ${feed.name} (${feed.url}) hat ${items.length} Items und ${unread} ungelesene.`);
             
             const id = safeId(feed.url);
             const countEl = document.querySelector(`#sidebar-feed-${id} .unread-count`);
