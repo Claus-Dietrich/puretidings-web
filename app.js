@@ -336,14 +336,35 @@ async function loadFeedPosts(url, feedName = '') {
             const isRead = userData.read_links.includes(link);
             const isFav = userData.favorited_links.includes(link);
             if (isRead) row.style.opacity = '0.5';
-            row.innerHTML = `<div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div><div class="post-info"><div class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}">${title}</div><div class="post-meta"><span>${getRelativeTime(pubDate)}</span><span style="margin-left:auto; color:#555;">(${calculateReadingTime(desc+encoded)} min read)</span></div></div><div class="post-actions"><button class="action-btn fav-btn" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button><button class="action-btn">👓</button></div>`;
+            
+            row.innerHTML = `
+                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+                <div class="post-info">
+                    <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                        ${title}
+                    </a>
+                    <div class="post-meta">
+                        <span>${getRelativeTime(pubDate)}</span>
+                        <span style="margin-left:auto; color:#555;">(${calculateReadingTime(desc+encoded)} min read)</span>
+                    </div>
+                </div>
+                <div class="post-actions" style="display:flex; gap:5px;">
+                    <button class="action-btn fav-btn" title="Zu Favoriten hinzufügen/entfernen" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
+                    <button class="action-btn reader-btn" title="Im Reader-Modus lesen">👓</button>
+                    <a href="${link}" target="_blank" class="action-btn" title="Original-Seite öffnen" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
+                </div>
+            `;
             
             row.querySelector('.fav-btn').onclick = (e) => {
-                e.stopPropagation();
+                e.preventDefault(); e.stopPropagation();
                 toggleFavorite(link, row.querySelector('.fav-btn'));
             };
 
-            row.onclick = () => openReader({title, link, desc: desc+encoded, thumbnail});
+            row.querySelector('.reader-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                openReader({title, link, desc: desc+encoded, thumbnail});
+            };
+
             container.appendChild(row);
         });
     } catch (e) { container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; }
@@ -372,9 +393,21 @@ async function openReader(post) {
     const overlay = document.getElementById('reader-overlay');
     const body = document.getElementById('reader-body');
     overlay.style.display = 'block'; document.body.style.overflow = 'hidden';
-    body.innerHTML = '<div class="spinner"></div>';
     
-    // Mark as Read
+    // Header mit Thumbnail und Original-Link
+    body.innerHTML = `
+        <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:30px; border-bottom:1px solid #333; padding-bottom:20px;">
+            ${post.thumbnail ? `<img src="${post.thumbnail}" style="width:120px; height:80px; object-fit:cover; border-radius:8px; border:1px solid #444;">` : ''}
+            <div style="flex:1;">
+                <h1 style="color:#ff9800; margin:0 0 10px 0; font-size:24px;">${post.title}</h1>
+                <a href="${post.link}" target="_blank" style="color:#4a90e2; font-size:13px; text-decoration:none; display:flex; align-items:center; gap:5px;" title="Original-Seite öffnen">
+                    <span>${post.link}</span> 🔗
+                </a>
+            </div>
+        </div>
+        <div class="spinner"></div>
+    `;
+    
     markAsRead(post.link);
 
     try {
@@ -382,7 +415,6 @@ async function openReader(post) {
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, "text/html");
         
-        // Base URL fix for relative links
         const base = doc.createElement('base');
         base.href = post.link;
         doc.head.appendChild(base);
@@ -391,11 +423,17 @@ async function openReader(post) {
         if (reader) {
             let content = reader.content;
             content = sanitizeReaderContent(content);
-            body.innerHTML = `<h1 style="color:#ff9800; margin-bottom:10px;">${reader.title}</h1>
-                             <div style="font-size:12px; color:#666; margin-bottom:30px;">${post.link}</div>
-                             <div style="font-size:16px; line-height:1.7; color:#eee;">${content}</div>`;
+            const spinner = body.querySelector('.spinner');
+            if (spinner) spinner.remove();
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.style.fontSize = '16px';
+            contentDiv.style.lineHeight = '1.7';
+            contentDiv.style.color = '#eee';
+            contentDiv.innerHTML = content;
+            body.appendChild(contentDiv);
         }
-    } catch (e) { body.innerHTML = `Fehler: ${e.message}`; }
+    } catch (e) { body.innerHTML += `<div style="color:red; margin-top:20px;">Fehler: ${e.message}</div>`; }
 }
 
 function sanitizeReaderContent(html) {
