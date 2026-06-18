@@ -208,18 +208,66 @@ async function loadFeedPosts(url, feedName = '') {
             const desc = item.querySelector('description, summary, media\\:description')?.textContent || '';
             const encoded = item.querySelector('encoded')?.textContent || '';
             const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
-            
+            // --- Thumbnail & Duration Extraction ---
             let thumbnail = '';
             const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
-            const mediaGroup = item.getElementsByTagName('media:group')[0];
-            const ytThumb = mediaGroup?.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url');
-            const mediaThumbnail = item.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url');
-            const featuredImg = item.querySelector('featured_image')?.textContent;
+            let durationStr = '';
 
-            if (ytId) thumbnail = ytThumb || `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
-            else if (featuredImg) thumbnail = featuredImg;
-            else if (mediaThumbnail) thumbnail = mediaThumbnail;
-            else { const imgMatch = (desc + encoded).match(/<img[^>]+src=["']([^">']+)["']/i); if (imgMatch) thumbnail = imgMatch[1]; }
+            if (ytId) {
+                const mediaGroup = item.getElementsByTagName('media:group')[0];
+                const ytThumb = mediaGroup?.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url');
+                thumbnail = ytThumb || `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
+                const cachedDuration = userData.duration_cache[ytId];
+                durationStr = cachedDuration ? cachedDuration : 'Video';
+            } else {
+                let mediaThumbnail = item.getElementsByTagName('media:thumbnail')[0];
+                if (mediaThumbnail && mediaThumbnail.getAttribute('url')) {
+                  thumbnail = mediaThumbnail.getAttribute('url');
+                }
+
+                if (!thumbnail) {
+                    const mediaContentNodes = item.getElementsByTagName('media:content');
+                    for (const node of mediaContentNodes) {
+                        const medium = node.getAttribute('medium');
+                        const type = node.getAttribute('type');
+                        if (medium === 'image' || (type && type.startsWith('image'))) {
+                            thumbnail = node.getAttribute('url');
+                            if (thumbnail) break;
+                        }
+                    }
+                }
+
+                if (!thumbnail) {
+                    const enclosureNodes = item.getElementsByTagName('enclosure');
+                    for (const node of enclosureNodes) {
+                        const type = node.getAttribute('type');
+                        if (type && type.startsWith('image')) {
+                            thumbnail = node.getAttribute('url');
+                            if (thumbnail) break;
+                        }
+                    }
+                }
+
+                if (!thumbnail) {
+                    const featuredImg = item.querySelector('featured_image')?.textContent;
+                    if (featuredImg) thumbnail = featuredImg;
+                }
+
+                if (!thumbnail) {
+                    const fullText = desc + encoded;
+                    // Suche nach allen img-Tags, nicht nur dem ersten, support single and double quotes
+                    const imgMatches = fullText.matchAll(/<img[^>]+src=["']([^"'>]+)["']/gi);
+                    for (const match of imgMatches) {
+                        const imgUrl = match[1];
+                        // Überspringe typische Tracking-Pixel (häufig bei Substack & Newslettern)
+                        if (!imgUrl.includes('1x1') && !imgUrl.includes('tracking') && !imgUrl.endsWith('.gif') && imgUrl.startsWith('http')) {
+                            thumbnail = imgUrl;
+                            break;
+                        }
+                    }
+                }
+                durationStr = `${calculateReadingTime(desc+encoded)} min read`;
+            }
             if (thumbnail && !thumbnail.startsWith('http')) try { thumbnail = new URL(thumbnail, new URL(url).origin).href; } catch(e) {}
 
             const isRead = userData.read_links.includes(link);
@@ -291,7 +339,15 @@ async function calculateAllUnreadCounts() {
                 if (link && !userData.read_links.includes(link)) unread++;
             });
             const countEl = document.querySelector(`#sidebar-feed-${safeId(feed.url)} .unread-count`);
-            if (countEl && unread > 0) { countEl.innerText = unread; countEl.style.display = 'inline-block'; }
+            if (countEl) {
+                if (unread > 0) {
+                    countEl.innerText = unread;
+                    countEl.style.display = 'inline-block';
+                } else {
+                    countEl.innerText = '0';
+                    countEl.style.display = 'none';
+                }
+            }
         } catch (e) {}
         await new Promise(r => setTimeout(r, 400));
     }
