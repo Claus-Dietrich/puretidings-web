@@ -328,7 +328,10 @@ async function loadFeedPosts(url, feedName = '') {
         const items = xml.querySelectorAll('item, entry');
         container.innerHTML = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span>${feedName || 'Feed'}</span>
-            <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
+            <div style="display:flex; gap:10px;">
+                <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
+                <button class="action-btn" title="Ganzen Feed als ungelesen markieren" onclick="markFeedAsUnread('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
+            </div>
         </div>`;
         
         items.forEach(item => {
@@ -380,7 +383,7 @@ async function loadFeedPosts(url, feedName = '') {
                 </div>
                 <div class="post-actions" style="display:flex; gap:5px;">
                     <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important; border:none; background:none; cursor:pointer;">📝</button>
+                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="color:${isSum ? '#28a745' : 'white'} !important; border:none; background:none; cursor:pointer; font-size:18px;">${isSum ? '✔' : '📋'}</button>
                     <button class="action-btn reader-btn" title="Reader">👓</button>
                     <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
                     <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
@@ -407,6 +410,37 @@ async function loadFeedPosts(url, feedName = '') {
             container.appendChild(row);
         });
     } catch (e) { container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; }
+}
+
+async function markFeedAsUnread(feedUrl) {
+    const rows = document.querySelectorAll('.post-row');
+    let changed = false;
+    let unreadCountAdded = 0;
+    
+    rows.forEach(row => {
+        const link = row.dataset.link;
+        if (link && userData.read_links.includes(link)) {
+            userData.read_links = userData.read_links.filter(l => l !== link);
+            row.style.opacity = '1';
+            row.querySelector('.post-title').style.fontWeight = '600';
+            row.querySelector('.unread-btn').style.display = 'none';
+            changed = true;
+            unreadCountAdded++;
+        }
+    });
+
+    if (changed) {
+        const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
+        if (countEl) {
+            let count = parseInt(countEl.innerText) || 0;
+            countEl.innerText = count + unreadCountAdded;
+            countEl.style.display = 'inline-block';
+        }
+
+        try {
+            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+        } catch (e) { console.error("Sync Mark Feed As Unread Error:", e); }
+    }
 }
 
 async function markFeedAsRead(feedUrl) {
@@ -510,10 +544,11 @@ async function toggleSummary(link, btn) {
     const isSum = userData.summary_links.includes(link);
     if (isSum) {
         userData.summary_links = userData.summary_links.filter(l => l !== link);
-        btn.style.setProperty('color', 'white', 'important');
+        btn.style.setProperty('filter', 'grayscale(1)', 'important');
     } else {
         userData.summary_links.push(link);
-        btn.style.setProperty('color', '#00ff00', 'important');
+        // Sepia/Hue-Rotate erzeugt einen Grünton (hue-rotate(90deg))
+        btn.style.setProperty('filter', 'sepia(1) saturate(5) hue-rotate(90deg)', 'important');
     }
 
     try {
