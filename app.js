@@ -1,137 +1,107 @@
-// PureTidings Web - Bulletproof Persistence Launcher
+// PureTidings Web - Bulletproof High-Performance Launcher
 const SUPABASE_URL = 'https://lujvogyndoryofuffntr.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1anZvZ3luZG9yeW9mdWZmbnRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MzI3ODYsImV4cCI6MjA5NzAwODc4Nn0.UEEN01ZKzcdkbP5ktOm35UgWwYQbbwTkM4K0u9_b09w';
 
 let db;
 let currentUser = null;
-let currentFeedUrl = null;
-let userData = {
-    feed_tree: [],
-    favorited_links: [],
-    summary_links: [],
-    read_links: [],
-    duration_cache: {}
-};
+let userData = { feed_tree: [], favorited_links: [], read_links: [], duration_cache: {} };
 
-// Hilfsfunktion: Zeigt Fehlermeldung direkt auf der Seite an (für besseres Debugging)
-function showErrorOnScreen(msg) {
-    const container = document.getElementById('posts-container');
-    if (container) {
-        container.innerHTML = `<div style="padding:40px; color:#ff4444; text-align:center;">
-            <h3>Etwas ist schiefgelaufen</h3>
-            <p>${msg}</p>
-            <button onclick="location.reload()" style="padding:10px 20px; background:#444; color:white; border:none; border-radius:5px; cursor:pointer;">Seite neu laden</button>
-        </div>`;
+// --- UI SCHALTER (Zentral & Sicher) ---
+function toggleUI(isLoggedIn) {
+    const auth = document.getElementById('auth-overlay');
+    const app = document.getElementById('app-container');
+    console.log("Toggle UI:", isLoggedIn ? "APP" : "AUTH");
+    
+    if (auth && app) {
+        if (isLoggedIn) {
+            auth.style.display = 'none';
+            app.style.display = 'flex';
+        } else {
+            auth.style.display = 'flex';
+            app.style.display = 'none';
+        }
     }
 }
 
+// --- INITIALISIERUNG ---
 async function init() {
-    console.log("🚀 PureTidings Init...");
+    console.log("🚀 Init gestartet...");
     
-    // 0. Service Worker radikal entfernen (verhindert hängende alte Versionen)
+    // Failsafe: Wenn nach 4s nichts passiert, Login zeigen
+    const failsafe = setTimeout(() => {
+        if (!currentUser) toggleUI(false);
+    }, 4000);
+
+    // 0. Service Worker Cleanup
     if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (let r of regs) await r.unregister();
+        try {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (let r of regs) await r.unregister();
+        } catch(e) {}
     }
 
     if (!window.supabase) {
-        showErrorOnScreen("Supabase Bibliothek konnte nicht geladen werden.");
+        console.error("Supabase fehlt!");
         return;
     }
 
-    try {
-        db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        
-        // 1. Explizite Prüfung der bestehenden Session beim Start
-        const { data: { session }, error } = await db.auth.getSession();
-        if (error) throw error;
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        if (session) {
-            console.log("Session gefunden:", session.user.email);
-            currentUser = session.user;
-            toggleUI(true);
-            await loadApp(session.user);
-        } else {
-            console.log("Keine Session. Zeige Login.");
-            toggleUI(false);
-        }
-
-        // 2. Listener für spätere Status-Änderungen (Login/Logout)
-        db.auth.onAuthStateChange(async (event, session) => {
-            console.log("Auth Event:", event);
-            if (event === 'SIGNED_IN' && session) {
-                currentUser = session.user;
-                toggleUI(true);
-                await loadApp(session.user);
-            } else if (event === 'SIGNED_OUT') {
-                currentUser = null;
-                toggleUI(false);
-            }
-        });
-
-    } catch (e) {
-        console.error("Init Fatal Error:", e);
-        showErrorOnScreen(e.message);
-    }
-
-    // Button Events
-    document.getElementById('login-btn').onclick = handleLogin;
-    document.getElementById('logout-btn').onclick = handleLogout;
-    
-    // Enter-Key Support
+    // Event Listener
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
     const emailInput = document.getElementById('email-input');
     const passInput = document.getElementById('password-input');
+
+    if (loginBtn) loginBtn.onclick = handleLogin;
+    if (logoutBtn) logoutBtn.onclick = handleLogout;
+    
     [emailInput, passInput].forEach(el => {
         if (el) el.onkeydown = (e) => { if (e.key === 'Enter') handleLogin(); };
     });
 
-    // Search Support
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) {
-        searchInput.oninput = (e) => handleSearch(e.target.value);
-    }
-}
-
-function handleSearch(query) {
-    const q = query.toLowerCase().trim();
-    const rows = document.querySelectorAll('.post-row');
-    rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        row.style.display = text.includes(q) ? 'flex' : 'none';
+    // Auth State
+    db.auth.onAuthStateChange(async (event, session) => {
+        console.log("Auth Event:", event);
+        if (session) {
+            clearTimeout(failsafe);
+            currentUser = session.user;
+            toggleUI(true);
+            await loadApp(session.user);
+        } else {
+            currentUser = null;
+            toggleUI(false);
+        }
     });
 }
 
-function toggleUI(isLoggedIn) {
-    const auth = document.getElementById('auth-overlay');
-    const app = document.getElementById('app-container');
-    if (!auth || !app) return;
-    auth.style.display = isLoggedIn ? 'none' : 'flex';
-    app.style.display = isLoggedIn ? 'flex' : 'none';
-}
-
+// --- AUTH AKTIONEN ---
 async function handleLogin() {
     const email = document.getElementById('email-input').value.trim();
     const password = document.getElementById('password-input').value;
-    if (!email) return alert('E-Mail eingeben');
+    if (!email) return alert('E-Mail fehlt');
     
     document.getElementById('auth-status').innerText = "Verarbeite...";
+    
     if (password) {
         const { error } = await db.auth.signInWithPassword({ email, password });
         if (error) alert(error.message);
     } else {
         const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
         if (error) alert(error.message);
-        else alert("Magic Link gesendet!");
+        else alert("Magic Link wurde gesendet!");
     }
 }
 
 async function handleLogout() {
-    toggleUI(false);
+    console.log("Logging out...");
+    toggleUI(false); // Sofort umschalten für visuelles Feedback
     await db.auth.signOut();
     localStorage.clear();
     location.reload();
 }
 
+// --- DATEN & SYNC ---
 async function loadApp(user) {
     const userBadge = document.getElementById('user-badge');
     if (userBadge) userBadge.innerText = user.email;
@@ -147,7 +117,6 @@ async function loadApp(user) {
             userData = {
                 feed_tree: data.feed_tree || [],
                 favorited_links: data.favorited_links || [],
-                summary_links: data.summary_links || [],
                 read_links: data.read_links || [],
                 duration_cache: data.duration_cache || {}
             };
@@ -156,8 +125,7 @@ async function loadApp(user) {
         renderSidebar(userData.feed_tree);
         checkProStatus(data || {});
         calculateAllUnreadCounts();
-
-    } catch (e) { showErrorOnScreen("Fehler beim Laden der Profildaten: " + e.message); }
+    } catch (e) { console.error("LoadApp Error:", e); }
 }
 
 function checkProStatus(data) {
@@ -171,567 +139,216 @@ function checkProStatus(data) {
     }
 }
 
-// --- SIDEBAR & COUNTERS ---
+let syncTimer = null;
+function sync() {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(async () => {
+        if (!currentUser) return;
+        await db.from('user_settings').update({
+            favorited_links: userData.favorited_links,
+            read_links: userData.read_links,
+            duration_cache: userData.duration_cache
+        }).eq('id', currentUser.id);
+    }, 1000);
+}
 
 function safeId(str) {
     if (!str) return 'id-unknown';
-    // Für YouTube URLs: Nur die Channel ID extrahieren, da Query-Params variieren können
-    if (str.includes('youtube.com/feeds')) {
-        const match = str.match(/channel_id=([^&]+)/);
-        if (match) return 'yt-' + match[1];
-    }
     try { return 'id-' + btoa(unescape(encodeURIComponent(str))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16); }
     catch(e) { return 'id-' + Math.random().toString(36).substr(2, 8); }
 }
 
+// --- UI RENDERING ---
 function renderSidebar(tree) {
     const container = document.getElementById('feed-tree-container');
     if (!container) return;
-    
     container.innerHTML = `
         <div style="padding:15px 10px;">
             <div onclick="showView('all')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#eee; font-size:13px; display:flex; align-items:center; gap:10px; background:#222; border-radius:6px; margin-bottom:5px;"><span>🏠</span> All Posts</div>
             <div onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px;"><span>⭐</span> Favorites</div>
         </div>
         <h3 style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0;">My Feeds</h3>
-        <div id="feed-list-items" style="padding-bottom: 20px;"></div>
+        <div id="feed-list-items"></div>
     `;
-    
     const list = document.getElementById('feed-list-items');
+    const ul = document.createElement('ul'); ul.style.listStyle = 'none'; ul.style.padding = '0';
     
-    function walk(nodes, parentEl, level = 0) {
+    function walk(nodes) {
         nodes.forEach(n => {
-            const li = document.createElement('div');
-            li.style.padding = `6px 15px 6px ${20 + (level * 15)}px`;
-            li.style.cursor = 'pointer';
-            li.style.fontSize = '13px';
-            li.style.color = '#ccc';
-            li.style.display = 'flex';
-            li.style.alignItems = 'center';
-            li.className = 'sidebar-item-row';
-
-            if (n.type === 'folder') {
-                li.innerHTML = `<span class="folder-toggle" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> <span style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#888;">${n.name.toUpperCase()}</span>`;
-                li.onclick = (e) => {
-                    const toggle = li.querySelector('.folder-toggle');
-                    const childrenContainer = li.nextElementSibling;
-                    const isHidden = childrenContainer.style.display === 'none';
-                    childrenContainer.style.display = isHidden ? 'block' : 'none';
-                    toggle.innerText = isHidden ? '▼' : '▶';
-                    e.stopPropagation();
-                };
-                parentEl.appendChild(li);
-                
-                const childrenContainer = document.createElement('div');
-                childrenContainer.className = 'folder-children';
-                parentEl.appendChild(childrenContainer);
-                walk(n.children || [], childrenContainer, level + 1);
-            } else if (n.type === 'feed' && n.url) {
-                const id = safeId(n.url);
-                li.id = `sidebar-feed-${id}`;
-                const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${new URL(n.url).hostname}`;
-                li.innerHTML = `<img src="${favicon}" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span><span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>`;
+            if (n.type === 'feed' && n.url) {
+                const li = document.createElement('li');
+                li.id = `sidebar-feed-${safeId(n.url)}`;
+                li.style.padding = '8px 20px'; li.style.cursor = 'pointer'; li.style.fontSize = '13px'; li.style.color = '#ccc';
+                li.style.display = 'flex'; li.style.alignItems = 'center';
+                li.innerHTML = `<span style="margin-right:8px; opacity:0.6;">📰</span> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span><span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>`;
                 li.onclick = () => loadFeedPosts(n.url, n.name);
-                parentEl.appendChild(li);
+                ul.appendChild(li);
             }
+            if (n.children) walk(n.children);
         });
     }
-    walk(tree, list);
+    walk(tree);
+    list.appendChild(ul);
 }
 
-function showView(view) {
-    if (view === 'all') {
-        // Todo: Implement All Posts view
-        alert('All Posts View wird noch implementiert');
-    } else if (view === 'favorites') {
-        // Todo: Implement Favorites view
-        alert('Favorites View wird noch implementiert');
+async function loadFeedPosts(url, feedName = '') {
+    const container = document.getElementById('posts-container');
+    container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div style="color:#888; font-size:14px;">Lade Artikel...</div></div>';
+    
+    try {
+        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+        const txt = await res.text();
+        const xml = new DOMParser().parseFromString(txt, "text/xml");
+        const items = xml.querySelectorAll('item, entry');
+        container.innerHTML = `<div class="feed-header">${feedName || 'Feed'}</div>`;
+        
+        items.forEach(item => {
+            const title = item.querySelector('title')?.textContent || 'Kein Titel';
+            let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
+            const desc = item.querySelector('description, summary, media\\:description')?.textContent || '';
+            const encoded = item.querySelector('encoded')?.textContent || '';
+            const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
+            
+            let thumbnail = '';
+            const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
+            const mediaGroup = item.getElementsByTagName('media:group')[0];
+            const ytThumb = mediaGroup?.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url');
+            const mediaThumbnail = item.getElementsByTagName('media:thumbnail')[0]?.getAttribute('url');
+            const featuredImg = item.querySelector('featured_image')?.textContent;
+
+            if (ytId) thumbnail = ytThumb || `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
+            else if (featuredImg) thumbnail = featuredImg;
+            else if (mediaThumbnail) thumbnail = mediaThumbnail;
+            else { const imgMatch = (desc + encoded).match(/<img[^>]+src=["']([^">']+)["']/i); if (imgMatch) thumbnail = imgMatch[1]; }
+            if (thumbnail && !thumbnail.startsWith('http')) try { thumbnail = new URL(thumbnail, new URL(url).origin).href; } catch(e) {}
+
+            const isRead = userData.read_links.includes(link);
+            const isFav = userData.favorited_links.includes(link);
+            const row = document.createElement('div'); row.className = 'post-row';
+            if (isRead) row.style.opacity = '0.5';
+            
+            row.innerHTML = `
+                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+                <div class="post-info">
+                    <div class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}">${title}</div>
+                    <div class="post-meta"><span>${getRelativeTime(pubDate)}</span><span class="duration-placeholder" style="margin-left:auto; color:#555;"></span></div>
+                </div>
+                <div class="post-actions">
+                    <button class="action-btn fav-btn" style="color:${isFav ? 'gold' : '#fff'} !important;">${isFav ? '⭐' : '☆'}</button>
+                    <button class="action-btn reader-trigger">👓</button>
+                    <a href="${link}" target="_blank" class="action-btn">🔗</a>
+                </div>
+            `;
+            const postData = { title, link, desc: desc + encoded, ytId, thumbnail, duration: '' };
+            const durSpan = row.querySelector('.duration-placeholder');
+            if (ytId || link.includes('youtube.com')) fetchYoutubeDuration(link, durSpan, postData);
+            else durSpan.innerText = `(${calculateReadingTime(desc+encoded)} min read)`;
+
+            row.querySelector('.post-title').onclick = () => { markAsRead(link); openReader(postData); };
+            row.querySelector('.reader-trigger').onclick = () => { markAsRead(link); openReader(postData); };
+            row.querySelector('.fav-btn').onclick = (e) => { e.stopPropagation(); toggleFavorite(link); };
+            container.appendChild(row);
+        });
+    } catch (e) { container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; }
+}
+
+// --- WEITERE FUNKTIONEN (Sicherheits-Kopien) ---
+async function fetchYoutubeDuration(url, element, postData) {
+    if (userData.duration_cache[url]) {
+        element.innerText = userData.duration_cache[url];
+        postData.duration = userData.duration_cache[url];
+        return;
     }
+    try {
+        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+        const html = await res.text();
+        const durationMatch = html.match(/<meta\s+itemprop="duration"\s+content="([^"]+)">/) || html.match(/"approxDurationMs":"(\d+)"/);
+        if (durationMatch) {
+            const match = durationMatch[1].match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+            const seconds = match ? (parseInt(match[1]||0)*3600)+(parseInt(m[2]||0)*60)+parseInt(m[3]||0) : Math.floor(parseInt(durationMatch[1])/1000);
+            const formatted = `(${Math.floor(seconds/60)}:${(seconds%60).toString().padStart(2,'0')})`;
+            element.innerText = formatted;
+            userData.duration_cache[url] = formatted;
+            postData.duration = formatted;
+            sync();
+        }
+    } catch (e) {}
 }
 
 async function calculateAllUnreadCounts() {
     const feeds = [];
     function walk(nodes) { nodes.forEach(n => { if (n.type === 'feed' && n.url) feeds.push(n); if (n.children) walk(n.children); }); }
     walk(userData.feed_tree);
-
     for (const feed of feeds) {
         try {
             const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: feed.url }) });
             if (!res.ok) continue;
-            const xmlStr = await res.text();
-            let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
-
-            // Check for parsing errors and apply fallback strategies
-            let parseError = xml.getElementsByTagName("parsererror");
-            if (parseError.length > 0) {
-                console.warn("XML parse error in count, trying text/html fallback.", parseError[0].textContent);
-                xml = new DOMParser().parseFromString(xmlStr, "text/html");
-            }
-            
-            // YouTube (Atom) nutzt 'entry', normales RSS nutzt 'item'
+            const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
             const items = xml.querySelectorAll('item, entry');
             let unread = 0;
             items.forEach(item => {
-                let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href');
-                if (!link || link === '') {
-                    const altLink = item.querySelector('link[rel="alternate"]');
-                    if (altLink) link = altLink.getAttribute('href');
-                }
+                const link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href');
                 if (link && !userData.read_links.includes(link)) unread++;
             });
-            
-            const id = safeId(feed.url);
-            const countEl = document.querySelector(`#sidebar-feed-${id} .unread-count`);
-            if (countEl) {
-                if (unread > 0) {
-                    countEl.innerText = unread;
-                    countEl.style.display = 'inline-block';
-                } else {
-                    countEl.style.display = 'none';
-                }
-            }
-        } catch (e) { console.error("Error counting unread for", feed.url, e); }
-        await new Promise(r => setTimeout(r, 150));
+            const countEl = document.querySelector(`#sidebar-feed-${safeId(feed.url)} .unread-count`);
+            if (countEl && unread > 0) { countEl.innerText = unread; countEl.style.display = 'inline-block'; }
+        } catch (e) {}
+        await new Promise(r => setTimeout(r, 400));
     }
-}
-
-// --- UTILS ---
-
-function getRelativeTime(dateStr) {
-    if (!dateStr) return '';
-    const then = new Date(dateStr);
-    if (isNaN(then)) return '';
-    const diff = Math.floor((new Date() - then) / 1000); 
-    if (diff < 60) return 'just now';
-    if (diff < 3600) return Math.floor(diff / 60) + ' min. ago';
-    if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
-    const days = Math.floor(diff / 86400);
-    if (days < 30) return days + (days === 1 ? ' day ago' : ' days ago');
-    const months = Math.floor(days / 30);
-    if (months < 12) return months + (months === 1 ? ' month ago' : ' months ago');
-    return then.toLocaleDateString();
-}
-
-function calculateReadingTime(text) {
-    const words = (text || '').replace(/<[^>]*>?/gm, '').trim().split(/\s+/).length;
-    return Math.max(1, Math.ceil(words / 225));
-}
-
-// --- FEED LOADING ---
-
-async function loadFeedPosts(url, feedName = '') {
-    currentFeedUrl = url;
-    const container = document.getElementById('posts-container');
-    container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade Artikel...</div></div>';
-    
-    // UI Feedback in Sidebar
-    document.querySelectorAll('.sidebar-item-row').forEach(el => el.style.background = 'transparent');
-    const activeRow = document.getElementById(`sidebar-feed-${safeId(url)}`);
-    if (activeRow) activeRow.style.background = '#2c2c2c';
-
-    try {
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
-        const xmlStr = await res.text();
-        let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
-        
-        // Check for parsing errors and apply fallback strategies
-        let parseError = xml.getElementsByTagName("parsererror");
-        if (parseError.length > 0) {
-            console.warn("XML parse error, trying text/html fallback.", parseError[0].textContent);
-            xml = new DOMParser().parseFromString(xmlStr, "text/html");
-        }
-
-        const items = xml.querySelectorAll('item, entry');
-        container.innerHTML = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>${feedName || 'Feed'}</span>
-            <div style="display:flex; gap:10px;">
-                <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
-                <button class="action-btn" title="Ganzen Feed als ungelesen markieren" onclick="markFeedAsUnread('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
-            </div>
-        </div>`;
-        
-        items.forEach(item => {
-            const title = item.querySelector('title')?.textContent || 'Kein Titel';
-            let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
-            if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
-                link = item.querySelector('link[rel="alternate"]').getAttribute('href');
-            }
-            const descText = item.querySelector('description, summary, media\\:description')?.textContent || '';
-            let encodedText = "";
-            const ceNodes = item.getElementsByTagName('content:encoded');
-            if (ceNodes.length > 0) {
-              encodedText = ceNodes[0].textContent;
-            } else {
-              const encNodes = item.getElementsByTagName('encoded');
-              if (encNodes.length > 0) encodedText = encNodes[0].textContent;
-              else {
-                const contentNodes = item.getElementsByTagName('content');
-                if (contentNodes.length > 0 && !contentNodes[0].getAttribute('url')) encodedText = contentNodes[0].textContent;
-              }
-            }
-            const desc = descText;
-            const encoded = encodedText;
-            const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
-            
-            // --- Thumbnail & Duration Extraction ---
-            let thumbnail = '';
-            const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
-            let durationStr = '';
-            
-            if (ytId) {
-                thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
-                const cachedDuration = userData.duration_cache[ytId];
-                durationStr = cachedDuration ? cachedDuration : 'Video';
-            } else {
-                let mediaThumbnail = item.querySelector('thumbnail');
-                if (!mediaThumbnail) {
-                  const mtNodes = item.getElementsByTagName('media:thumbnail');
-                  if (mtNodes.length > 0) mediaThumbnail = mtNodes[0];
-                }
-                if (mediaThumbnail && mediaThumbnail.getAttribute('url')) {
-                  thumbnail = mediaThumbnail.getAttribute('url');
-                }
-
-                if (!thumbnail) {
-                    const mediaContentNodes = item.getElementsByTagName('media:content');
-                    for (const node of mediaContentNodes) {
-                        const medium = node.getAttribute('medium');
-                        const type = node.getAttribute('type');
-                        if (medium === 'image' || (type && type.startsWith('image'))) {
-                            thumbnail = node.getAttribute('url');
-                            if (thumbnail) break;
-                        }
-                    }
-                }
-
-                if (!thumbnail) {
-                    const enclosureNodes = item.getElementsByTagName('enclosure');
-                    for (const node of enclosureNodes) {
-                        const type = node.getAttribute('type');
-                        if (type && type.startsWith('image')) {
-                            thumbnail = node.getAttribute('url');
-                            if (thumbnail) break;
-                        }
-                    }
-                }
-                
-                if (!thumbnail) {
-                    const fullText = desc + encoded;
-                    // Suche nach allen img-Tags, nicht nur dem ersten, support single and double quotes
-                    const imgMatches = fullText.matchAll(/<img[^>]+src=["']([^"'>]+)["']/gi);
-                    for (const match of imgMatches) {
-                        const imgUrl = match[1];
-                        // Überspringe typische Tracking-Pixel (häufig bei Substack & Newslettern)
-                        if (!imgUrl.includes('1x1') && !imgUrl.includes('tracking') && !imgUrl.endsWith('.gif') && imgUrl.startsWith('http')) {
-                            thumbnail = imgUrl;
-                            break;
-                        }
-                    }
-                }
-                durationStr = `${calculateReadingTime(desc+encoded)} min read`;
-            }
-
-            const row = document.createElement('div'); 
-            row.className = 'post-row';
-            row.dataset.link = link;
-            const isRead = userData.read_links.includes(link);
-            const isFav = userData.favorited_links.includes(link);
-            const isSum = userData.summary_links && userData.summary_links.includes(link);
-            if (isRead) row.style.opacity = '0.5';
-            
-            row.innerHTML = `
-                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
-                <div class="post-info">
-                    <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                        ${title}
-                    </a>
-                    <div class="post-meta">
-                        <span>${getRelativeTime(pubDate)}</span>
-                        <span style="margin-left:auto; color:#555;">(${durationStr})</span>
-                    </div>
-                </div>
-                <div class="post-actions" style="display:flex; gap:5px;">
-                    <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
-                    <button class="action-btn reader-btn" title="Reader">👓</button>
-                    <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
-                    <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
-                </div>
-            `;
-            
-            row.querySelector('.fav-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleFavorite(link, row.querySelector('.fav-btn'));
-            };
-            row.querySelector('.sum-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleSummary(link, row.querySelector('.sum-btn'));
-            };
-            row.querySelector('.reader-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                openReader({title, link, desc: desc+encoded, thumbnail});
-            };
-            row.querySelector('.unread-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                markAsUnread(link, row);
-            };
-
-            container.appendChild(row);
-        });
-    } catch (e) { container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; }
-}
-
-async function markFeedAsUnread(feedUrl) {
-    const rows = document.querySelectorAll('.post-row');
-    let changed = false;
-    let unreadCountAdded = 0;
-    
-    rows.forEach(row => {
-        const link = row.dataset.link;
-        if (link && userData.read_links.includes(link)) {
-            userData.read_links = userData.read_links.filter(l => l !== link);
-            row.style.opacity = '1';
-            row.querySelector('.post-title').style.fontWeight = '600';
-            row.querySelector('.unread-btn').style.display = 'none';
-            changed = true;
-            unreadCountAdded++;
-        }
-    });
-
-    if (changed) {
-        const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
-        if (countEl) {
-            let count = parseInt(countEl.innerText) || 0;
-            countEl.innerText = count + unreadCountAdded;
-            countEl.style.display = 'inline-block';
-        }
-
-        try {
-            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
-        } catch (e) { console.error("Sync Mark Feed As Unread Error:", e); }
-    }
-}
-
-async function markFeedAsRead(feedUrl) {
-    const rows = document.querySelectorAll('.post-row');
-    let changed = false;
-    rows.forEach(row => {
-        const link = row.dataset.link;
-        if (link && !userData.read_links.includes(link)) {
-            userData.read_links.push(link);
-            row.style.opacity = '0.5';
-            row.querySelector('.post-title').style.fontWeight = 'normal';
-            row.querySelector('.unread-btn').style.display = 'flex';
-            changed = true;
-        }
-    });
-
-    if (changed) {
-        const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
-        if (countEl) countEl.style.display = 'none';
-
-        try {
-            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
-        } catch (e) { console.error("Sync Mark Feed As Read Error:", e); }
-    }
-}
-
-async function markAsUnread(link, row) {
-    userData.read_links = userData.read_links.filter(l => l !== link);
-    row.style.opacity = '1';
-    row.querySelector('.post-title').style.fontWeight = '600';
-    row.querySelector('.unread-btn').style.display = 'none';
-
-    if (currentFeedUrl) {
-        const countEl = document.querySelector(`#sidebar-feed-${safeId(currentFeedUrl)} .unread-count`);
-        if (countEl) {
-            let count = parseInt(countEl.innerText) || 0;
-            countEl.innerText = count + 1;
-            countEl.style.display = 'inline-block';
-        }
-    }
-
-    try {
-        await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
-    } catch (e) { console.error("Sync Mark As Unread Error:", e); }
 }
 
 async function markAsRead(link) {
     if (!userData.read_links.includes(link)) {
         userData.read_links.push(link);
-        
-        const rows = document.querySelectorAll('.post-row');
-        rows.forEach(row => {
-            if (row.dataset.link === link) {
-                row.style.opacity = '0.5';
-                const title = row.querySelector('.post-title');
-                if (title) title.style.fontWeight = 'normal';
-                const unreadBtn = row.querySelector('.unread-btn');
-                if (unreadBtn) unreadBtn.style.display = 'flex';
-            }
-        });
-
-        if (currentFeedUrl) {
-            const countEl = document.querySelector(`#sidebar-feed-${safeId(currentFeedUrl)} .unread-count`);
-            if (countEl) {
-                let count = parseInt(countEl.innerText) || 0;
-                if (count > 0) {
-                    count--;
-                    countEl.innerText = count;
-                    if (count === 0) countEl.style.display = 'none';
-                }
-            }
-        }
-
-        try {
-            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
-        } catch (e) { console.error("Sync Read Status Error:", e); }
+        sync();
+        document.querySelectorAll('.post-row').forEach(row => { if (row.querySelector('a')?.href === link) row.style.opacity = '0.5'; });
     }
 }
 
-async function toggleFavorite(link, btn) {
-    const isFav = userData.favorited_links.includes(link);
-    if (isFav) {
-        userData.favorited_links = userData.favorited_links.filter(l => l !== link);
-        btn.innerText = '☆';
-        btn.style.setProperty('color', 'white', 'important');
-    } else {
-        userData.favorited_links.push(link);
-        btn.innerText = '★';
-        btn.style.setProperty('color', 'gold', 'important');
+async function toggleFavorite(link) {
+    const idx = userData.favorited_links.indexOf(link);
+    if (idx > -1) userData.favorited_links.splice(idx, 1);
+    else userData.favorited_links.push(link);
+    sync();
+    // Re-render aktuelle Ansicht oder nur Button updaten
+    const row = Array.from(document.querySelectorAll('.post-row')).find(r => r.querySelector('a')?.href === link);
+    if (row) {
+        const btn = row.querySelector('.fav-btn');
+        const isFav = userData.favorited_links.includes(link);
+        btn.innerHTML = isFav ? '⭐' : '☆';
+        btn.style.color = isFav ? 'gold !important' : '#fff !important';
     }
-
-    try {
-        await db.from('user_settings')
-            .update({ favorited_links: userData.favorited_links })
-            .eq('id', currentUser.id);
-    } catch (e) { console.error("Sync Favorite Error:", e); }
-}
-
-async function toggleSummary(link, btn) {
-    if (!userData.summary_links) userData.summary_links = [];
-    const isSum = userData.summary_links.includes(link);
-    if (isSum) {
-        userData.summary_links = userData.summary_links.filter(l => l !== link);
-        btn.style.setProperty('filter', 'grayscale(1)', 'important');
-    } else {
-        userData.summary_links.push(link);
-        btn.style.setProperty('filter', 'sepia(1) saturate(5) hue-rotate(90deg)', 'important');
-    }
-
-    try {
-        await db.from('user_settings')
-            .update({ summary_links: userData.summary_links })
-            .eq('id', currentUser.id);
-    } catch (e) { console.error("Sync Summary Error:", e); }
 }
 
 async function openReader(post) {
     const overlay = document.getElementById('reader-overlay');
     const body = document.getElementById('reader-body');
     overlay.style.display = 'block'; document.body.style.overflow = 'hidden';
-    
-    const isYouTube = post.link.includes('youtube.com') || post.link.includes('youtu.be');
-
-    body.innerHTML = `
-        <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:30px; border-bottom:1px solid #333; padding-bottom:20px;">
-            ${post.thumbnail ? `<img src="${post.thumbnail}" style="width:120px; height:80px; object-fit:cover; border-radius:8px; border:1px solid #444;">` : ''}
-            <div style="flex:1;">
-                <h1 style="color:#ff9800; margin:0 0 10px 0; font-size:24px;">${post.title}</h1>
-                <a href="${post.link}" target="_blank" style="color:#4a90e2; font-size:13px; text-decoration:none; display:flex; align-items:center; gap:5px;" title="Original-Seite öffnen">
-                    <span>${post.link}</span> 🔗
-                </a>
-            </div>
-        </div>
-        <div id="reader-inner-content">
-            <div class="spinner"></div>
-        </div>
-    `;
-    
-    markAsRead(post.link);
-
-    const innerContent = body.querySelector('#reader-inner-content');
-
-    if (isYouTube) {
-        let ytId = '';
-        try {
-            const url = new URL(post.link);
-            if (url.hostname.includes('youtu.be')) ytId = url.pathname.substring(1);
-            else ytId = url.searchParams.get('v') || url.pathname.split('/').pop();
-        } catch(e) {}
-        
-        if (ytId) {
-            innerContent.innerHTML = `
-                <a href="https://www.youtube.com/watch?v=${ytId}" target="_blank" style="text-decoration:none; display:block;">
-                    <div style="margin:20px 0; position:relative; cursor:pointer;">
-                        <img src="https://i.ytimg.com/vi/${ytId}/hqdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;">
-                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:40px; border:2px solid white;">▶</div>
-                    </div>
-                </a>
-                <div style="margin-top:20px; color:#ccc; font-size:15px; line-height:1.6; white-space:pre-wrap;">${post.desc || 'Keine Beschreibung verfügbar.'}</div>
-                <p style="text-align:center; color:#555; font-size:13px; margin-top:30px;">Klicke auf das Vorschaubild, um das Video zu starten (öffnet ggf. die YouTube App).</p>
-            `;
-            return;
-        }
-    }
-
+    body.innerHTML = '<div class="spinner"></div>';
     try {
         const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: post.link }) });
         const html = await res.text();
         const doc = new DOMParser().parseFromString(html, "text/html");
-        
-        const base = doc.createElement('base');
-        base.href = post.link;
-        doc.head.appendChild(base);
-
+        const base = doc.createElement('base'); base.href = post.link; doc.head.appendChild(base);
         const reader = new Readability(doc).parse();
         if (reader) {
-            let content = reader.content;
-            content = sanitizeReaderContent(content);
-            innerContent.innerHTML = `<div style="font-size:16px; line-height:1.7; color:#eee;">${content}</div>`;
+            body.innerHTML = `<div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:25px; border-bottom:1px solid #333; padding-bottom:20px;"><img src="${post.thumbnail || '128.png'}" style="width:100px; height:70px; object-fit:cover; border-radius:6px; border:1px solid #444; background:#222;"><div style="flex:1;"><h1 style="margin:0 0 8px 0; font-size:22px; color:#ff9800;">${reader.title}</h1><div style="font-size:14px;"><a href="${post.link}" target="_blank" style="color:#4a90e2; text-decoration:underline;">Read Original Article</a><span style="color:#666; margin-left:10px;">(${post.duration || calculateReadingTime(reader.textContent) + ' min read'})</span></div></div></div><div style="font-size:16px; line-height:1.7; color:#eee;">${reader.content}</div>`;
         }
-    } catch (e) { innerContent.innerHTML = `<div style="color:red; margin-top:20px;">Fehler beim Laden des Inhalts: ${e.message}</div>`; }
-}
-
-function sanitizeReaderContent(html) {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    
-    // 1. YouTube Iframe zu Thumbnail Filter (Vermeidet Error 153)
-    const iframes = div.querySelectorAll('iframe[src*="youtube.com"], iframe[src*="youtu.be"]');
-    iframes.forEach(ifr => {
-        let ytId = '';
-        try {
-            const url = new URL(ifr.src);
-            if (url.hostname.includes('youtu.be')) ytId = url.pathname.substring(1);
-            else ytId = url.searchParams.get('v') || url.pathname.split('/').pop();
-        } catch(e) {}
-        
-        if (ytId) {
-            const container = document.createElement('div');
-            container.style.margin = '20px 0';
-            container.style.position = 'relative';
-            container.style.cursor = 'pointer';
-            container.innerHTML = `
-                <img src="https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;" onerror="this.src='https://i.ytimg.com/vi/${ytId}/mqdefault.jpg'">
-                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:30px; border:2px solid white;">▶</div>
-            `;
-            container.onclick = () => window.open(`https://www.youtube.com/watch?v=${ytId}`, '_blank');
-            ifr.replaceWith(container);
-        }
-    });
-
-    // 2. Responsive Images
-    div.querySelectorAll('img').forEach(img => {
-        img.style.maxWidth = '100%';
-        img.style.height = 'auto';
-        img.style.borderRadius = '8px';
-        img.style.margin = '15px 0';
-    });
-
-    return div.innerHTML;
+    } catch (e) { body.innerHTML = `<div style="text-align:center; padding:20px;"><div style="color:red; margin-bottom:15px;">Fehler: ${e.message}</div><a href="${post.link}" target="_blank" style="display:inline-block; padding:10px 20px; background:#ff9800; color:white; text-decoration:none; border-radius:6px;">Original öffnen</a></div>`; }
 }
 
 function closeReader() { document.getElementById('reader-overlay').style.display = 'none'; document.body.style.overflow = 'auto'; }
 window.onkeydown = (e) => { if (e.key === 'Escape') closeReader(); };
+function showView(t) { if (t==='favorites') renderFavorites(); else document.getElementById('posts-container').innerHTML = `<div style="padding:40px; text-align:center; color:#888;">Wähle einen Feed aus.</div>`; }
+async function renderFavorites() {
+    const container = document.getElementById('posts-container');
+    container.innerHTML = `<div class="feed-header">⭐ Meine Favoriten</div>`;
+    if (userData.favorited_links.length === 0) { container.innerHTML += '<div style="padding:40px; text-align:center; color:#888;">Noch keine Favoriten.</div>'; return; }
+    userData.favorited_links.forEach(link => {
+        const div = document.createElement('div'); div.className = 'post-row';
+        div.innerHTML = `<div class="post-thumbnail">⭐</div><div class="post-info"><div class="post-title">${link}</div></div><div class="post-actions"><button class="action-btn" onclick="toggleFavorite('${link}')">🗑️</button><a href="${link}" target="_blank" class="action-btn">🔗</a></div>`;
+        container.appendChild(div);
+    });
+}
+
 window.onload = init;
