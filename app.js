@@ -788,4 +788,7 @@ function sanitizeReaderContent(html) {
 
 function closeReader() { document.getElementById('reader-overlay').style.display = 'none'; document.body.style.overflow = 'auto'; }
 window.onkeydown = (e) => { if (e.key === 'Escape') closeReader(); };
-window.onload = init;
+window.onload = () => {
+    init();
+    setupResizer();
+};
