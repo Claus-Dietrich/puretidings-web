@@ -82,6 +82,21 @@ async function init() {
     [emailInput, passInput].forEach(el => {
         if (el) el.onkeydown = (e) => { if (e.key === 'Enter') handleLogin(); };
     });
+
+    // Search Support
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.oninput = (e) => handleSearch(e.target.value);
+    }
+}
+
+function handleSearch(query) {
+    const q = query.toLowerCase().trim();
+    const rows = document.querySelectorAll('.post-row');
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(q) ? 'flex' : 'none';
+    });
 }
 
 function toggleUI(isLoggedIn) {
@@ -171,28 +186,59 @@ function renderSidebar(tree) {
             <div onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px;"><span>⭐</span> Favorites</div>
         </div>
         <h3 style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0;">My Feeds</h3>
-        <div id="feed-list-items"></div>
+        <div id="feed-list-items" style="padding-bottom: 20px;"></div>
     `;
     
     const list = document.getElementById('feed-list-items');
-    const ul = document.createElement('ul'); ul.style.listStyle = 'none'; ul.style.padding = '0';
     
-    function walk(nodes) {
+    function walk(nodes, parentEl, level = 0) {
         nodes.forEach(n => {
-            if (n.type === 'feed' && n.url) {
-                const li = document.createElement('li');
-                li.id = `sidebar-feed-${safeId(n.url)}`;
-                li.style.padding = '8px 20px'; li.style.cursor = 'pointer'; li.style.fontSize = '13px'; li.style.color = '#ccc';
-                li.style.display = 'flex'; li.style.alignItems = 'center';
-                li.innerHTML = `<span style="margin-right:8px; opacity:0.6;">📰</span> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span><span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>`;
+            const li = document.createElement('div');
+            li.style.padding = `6px 15px 6px ${20 + (level * 15)}px`;
+            li.style.cursor = 'pointer';
+            li.style.fontSize = '13px';
+            li.style.color = '#ccc';
+            li.style.display = 'flex';
+            li.style.alignItems = 'center';
+            li.className = 'sidebar-item-row';
+
+            if (n.type === 'folder') {
+                li.innerHTML = `<span class="folder-toggle" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> <span style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#888;">${n.name.toUpperCase()}</span>`;
+                li.onclick = (e) => {
+                    const toggle = li.querySelector('.folder-toggle');
+                    const childrenContainer = li.nextElementSibling;
+                    const isHidden = childrenContainer.style.display === 'none';
+                    childrenContainer.style.display = isHidden ? 'block' : 'none';
+                    toggle.innerText = isHidden ? '▼' : '▶';
+                    e.stopPropagation();
+                };
+                parentEl.appendChild(li);
+                
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'folder-children';
+                parentEl.appendChild(childrenContainer);
+                walk(n.children || [], childrenContainer, level + 1);
+            } else if (n.type === 'feed' && n.url) {
+                const id = safeId(n.url);
+                li.id = `sidebar-feed-${id}`;
+                const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${new URL(n.url).hostname}`;
+                li.innerHTML = `<img src="${favicon}" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span><span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>`;
                 li.onclick = () => loadFeedPosts(n.url, n.name);
-                ul.appendChild(li);
+                parentEl.appendChild(li);
             }
-            if (n.children) walk(n.children);
         });
     }
-    walk(tree);
-    list.appendChild(ul);
+    walk(tree, list);
+}
+
+function showView(view) {
+    if (view === 'all') {
+        // Todo: Implement All Posts view
+        alert('All Posts View wird noch implementiert');
+    } else if (view === 'favorites') {
+        // Todo: Implement Favorites view
+        alert('Favorites View wird noch implementiert');
+    }
 }
 
 async function calculateAllUnreadCounts() {
@@ -259,12 +305,38 @@ async function loadFeedPosts(url, feedName = '') {
             if (ytId) thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
             const row = document.createElement('div'); row.className = 'post-row';
             const isRead = userData.read_links.includes(link);
+            const isFav = userData.favorited_links.includes(link);
             if (isRead) row.style.opacity = '0.5';
-            row.innerHTML = `<div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div><div class="post-info"><div class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}">${title}</div><div class="post-meta"><span>${getRelativeTime(pubDate)}</span><span style="margin-left:auto; color:#555;">(${calculateReadingTime(desc+encoded)} min read)</span></div></div><div class="post-actions"><button class="action-btn fav-btn">☆</button><button class="action-btn">👓</button></div>`;
+            row.innerHTML = `<div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div><div class="post-info"><div class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}">${title}</div><div class="post-meta"><span>${getRelativeTime(pubDate)}</span><span style="margin-left:auto; color:#555;">(${calculateReadingTime(desc+encoded)} min read)</span></div></div><div class="post-actions"><button class="action-btn fav-btn" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button><button class="action-btn">👓</button></div>`;
+            
+            row.querySelector('.fav-btn').onclick = (e) => {
+                e.stopPropagation();
+                toggleFavorite(link, row.querySelector('.fav-btn'));
+            };
+
             row.onclick = () => openReader({title, link, desc: desc+encoded, thumbnail});
             container.appendChild(row);
         });
     } catch (e) { container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; }
+}
+
+async function toggleFavorite(link, btn) {
+    const isFav = userData.favorited_links.includes(link);
+    if (isFav) {
+        userData.favorited_links = userData.favorited_links.filter(l => l !== link);
+        btn.innerText = '☆';
+        btn.style.color = 'white !important';
+    } else {
+        userData.favorited_links.push(link);
+        btn.innerText = '★';
+        btn.style.color = 'gold !important';
+    }
+
+    try {
+        await db.from('user_settings')
+            .update({ favorited_links: userData.favorited_links })
+            .eq('id', currentUser.id);
+    } catch (e) { console.error("Sync Favorite Error:", e); }
 }
 
 async function openReader(post) {
@@ -272,13 +344,92 @@ async function openReader(post) {
     const body = document.getElementById('reader-body');
     overlay.style.display = 'block'; document.body.style.overflow = 'hidden';
     body.innerHTML = '<div class="spinner"></div>';
+    
+    // Mark as Read
+    markAsRead(post.link);
+
     try {
         const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: post.link }) });
-        const reader = new Readability(new DOMParser().parseFromString(await res.text(), "text/html")).parse();
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        
+        // Base URL fix for relative links
+        const base = doc.createElement('base');
+        base.href = post.link;
+        doc.head.appendChild(base);
+
+        const reader = new Readability(doc).parse();
         if (reader) {
-            body.innerHTML = `<h1 style="color:#ff9800;">${reader.title}</h1><div style="font-size:16px; line-height:1.7; color:#eee;">${reader.content}</div>`;
+            let content = reader.content;
+            content = sanitizeReaderContent(content);
+            body.innerHTML = `<h1 style="color:#ff9800; margin-bottom:10px;">${reader.title}</h1>
+                             <div style="font-size:12px; color:#666; margin-bottom:30px;">${post.link}</div>
+                             <div style="font-size:16px; line-height:1.7; color:#eee;">${content}</div>`;
         }
     } catch (e) { body.innerHTML = `Fehler: ${e.message}`; }
+}
+
+function sanitizeReaderContent(html) {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    
+    // 1. YouTube Iframe zu Thumbnail Filter (Vermeidet Error 153)
+    const iframes = div.querySelectorAll('iframe[src*="youtube.com"], iframe[src*="youtu.be"]');
+    iframes.forEach(ifr => {
+        let ytId = '';
+        try {
+            const url = new URL(ifr.src);
+            if (url.hostname.includes('youtu.be')) ytId = url.pathname.substring(1);
+            else ytId = url.searchParams.get('v') || url.pathname.split('/').pop();
+        } catch(e) {}
+        
+        if (ytId) {
+            const container = document.createElement('div');
+            container.style.margin = '20px 0';
+            container.style.position = 'relative';
+            container.style.cursor = 'pointer';
+            container.innerHTML = `
+                <img src="https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;" onerror="this.src='https://i.ytimg.com/vi/${ytId}/mqdefault.jpg'">
+                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:30px; border:2px solid white;">▶</div>
+            `;
+            container.onclick = () => window.open(`https://www.youtube.com/watch?v=${ytId}`, '_blank');
+            ifr.replaceWith(container);
+        }
+    });
+
+    // 2. Responsive Images
+    div.querySelectorAll('img').forEach(img => {
+        img.style.maxWidth = '100%';
+        img.style.height = 'auto';
+        img.style.borderRadius = '8px';
+        img.style.margin = '15px 0';
+    });
+
+    return div.innerHTML;
+}
+
+async function markAsRead(link) {
+    if (!userData.read_links.includes(link)) {
+        userData.read_links.push(link);
+        
+        // UI Update: Find the row and fade it
+        const rows = document.querySelectorAll('.post-row');
+        rows.forEach(row => {
+            // This is a bit expensive but reliable for a prototype
+            if (row.innerHTML.includes(link)) {
+                row.style.opacity = '0.5';
+                const title = row.querySelector('.post-title');
+                if (title) title.style.fontWeight = 'normal';
+            }
+        });
+
+        // Sync to Supabase
+        try {
+            await db.from('user_settings')
+                .update({ read_links: userData.read_links })
+                .eq('id', currentUser.id);
+        } catch (e) { console.error("Sync Read Status Error:", e); }
+    }
 }
 
 function closeReader() { document.getElementById('reader-overlay').style.display = 'none'; document.body.style.overflow = 'auto'; }
