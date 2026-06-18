@@ -260,7 +260,15 @@ async function calculateAllUnreadCounts() {
 
     for (const feed of feeds) {
         try {
-            const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: feed.url }) });
+            const { data: { session } } = await db.auth.getSession();
+            const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
+                }, 
+                body: JSON.stringify({ url: feed.url }) 
+            });
             if (!res.ok) continue;
             const xmlStr = await res.text();
             let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
