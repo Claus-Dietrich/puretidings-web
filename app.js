@@ -47,6 +47,16 @@ async function init() {
 
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    // FIX: Check session immediately on load
+    const { data: { session } } = await db.auth.getSession();
+    if (session) {
+        currentUser = session.user;
+        toggleUI(true);
+        await loadApp(session.user);
+    } else {
+        toggleUI(false);
+    }
+
     // Event Listener
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
