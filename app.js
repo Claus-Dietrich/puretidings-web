@@ -340,8 +340,21 @@ async function loadFeedPosts(url, feedName = '') {
             if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
                 link = item.querySelector('link[rel="alternate"]').getAttribute('href');
             }
-            const desc = item.querySelector('description, summary, media\\:description')?.textContent || '';
-            const encoded = item.querySelector('encoded')?.textContent || '';
+            const descText = item.querySelector('description, summary, media\\:description')?.textContent || '';
+            let encodedText = "";
+            const ceNodes = item.getElementsByTagName('content:encoded');
+            if (ceNodes.length > 0) {
+              encodedText = ceNodes[0].textContent;
+            } else {
+              const encNodes = item.getElementsByTagName('encoded');
+              if (encNodes.length > 0) encodedText = encNodes[0].textContent;
+              else {
+                const contentNodes = item.getElementsByTagName('content');
+                if (contentNodes.length > 0 && !contentNodes[0].getAttribute('url')) encodedText = contentNodes[0].textContent;
+              }
+            }
+            const desc = descText;
+            const encoded = encodedText;
             const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
             
             // --- Thumbnail & Duration Extraction ---
@@ -354,13 +367,42 @@ async function loadFeedPosts(url, feedName = '') {
                 const cachedDuration = userData.duration_cache[ytId];
                 durationStr = cachedDuration ? cachedDuration : 'Video';
             } else {
-                const mediaContent = item.getElementsByTagName('media:content')[0] || item.getElementsByTagName('content')[0];
-                if (mediaContent && mediaContent.getAttribute('url')) thumbnail = mediaContent.getAttribute('url');
+                let mediaThumbnail = item.querySelector('thumbnail');
+                if (!mediaThumbnail) {
+                  const mtNodes = item.getElementsByTagName('media:thumbnail');
+                  if (mtNodes.length > 0) mediaThumbnail = mtNodes[0];
+                }
+                if (mediaThumbnail && mediaThumbnail.getAttribute('url')) {
+                  thumbnail = mediaThumbnail.getAttribute('url');
+                }
+
+                if (!thumbnail) {
+                    const mediaContentNodes = item.getElementsByTagName('media:content');
+                    for (const node of mediaContentNodes) {
+                        const medium = node.getAttribute('medium');
+                        const type = node.getAttribute('type');
+                        if (medium === 'image' || (type && type.startsWith('image'))) {
+                            thumbnail = node.getAttribute('url');
+                            if (thumbnail) break;
+                        }
+                    }
+                }
+
+                if (!thumbnail) {
+                    const enclosureNodes = item.getElementsByTagName('enclosure');
+                    for (const node of enclosureNodes) {
+                        const type = node.getAttribute('type');
+                        if (type && type.startsWith('image')) {
+                            thumbnail = node.getAttribute('url');
+                            if (thumbnail) break;
+                        }
+                    }
+                }
                 
                 if (!thumbnail) {
                     const fullText = desc + encoded;
-                    // Suche nach allen img-Tags, nicht nur dem ersten
-                    const imgMatches = fullText.matchAll(/<img[^>]+src="([^">]+)"/gi);
+                    // Suche nach allen img-Tags, nicht nur dem ersten, support single and double quotes
+                    const imgMatches = fullText.matchAll(/<img[^>]+src=["']([^"'>]+)["']/gi);
                     for (const match of imgMatches) {
                         const imgUrl = match[1];
                         // Überspringe typische Tracking-Pixel (häufig bei Substack & Newslettern)
