@@ -4,6 +4,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 let db;
 let currentUser = null;
+let currentFeedUrl = null;
 let userData = {
     feed_tree: [],
     favorited_links: [],
@@ -250,17 +251,32 @@ async function calculateAllUnreadCounts() {
         try {
             const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: feed.url }) });
             if (!res.ok) continue;
-            const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+            const xmlStr = await res.text();
+            const xml = new DOMParser().parseFromString(xmlStr, "text/xml");
+            
+            // YouTube (Atom) nutzt 'entry', normales RSS nutzt 'item'
             const items = xml.querySelectorAll('item, entry');
             let unread = 0;
             items.forEach(item => {
-                const link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href');
+                let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href');
+                if (!link && item.querySelector('link[rel="alternate"]')) {
+                    link = item.querySelector('link[rel="alternate"]').getAttribute('href');
+                }
                 if (link && !userData.read_links.includes(link)) unread++;
             });
-            const countEl = document.querySelector(`#sidebar-feed-${safeId(feed.url)} .unread-count`);
-            if (countEl && unread > 0) { countEl.innerText = unread; countEl.style.display = 'inline-block'; }
-        } catch (e) {}
-        await new Promise(r => setTimeout(r, 400));
+            
+            const id = safeId(feed.url);
+            const countEl = document.querySelector(`#sidebar-feed-${id} .unread-count`);
+            if (countEl) {
+                if (unread > 0) {
+                    countEl.innerText = unread;
+                    countEl.style.display = 'inline-block';
+                } else {
+                    countEl.style.display = 'none';
+                }
+            }
+        } catch (e) { console.error("Error counting unread for", feed.url, e); }
+        await new Promise(r => setTimeout(r, 200));
     }
 }
 
@@ -285,9 +301,15 @@ function calculateReadingTime(text) {
 // --- FEED LOADING ---
 
 async function loadFeedPosts(url, feedName = '') {
+    currentFeedUrl = url;
     const container = document.getElementById('posts-container');
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade Artikel...</div></div>';
     
+    // UI Feedback in Sidebar
+    document.querySelectorAll('.sidebar-item-row').forEach(el => el.style.background = 'transparent');
+    const activeRow = document.getElementById(`sidebar-feed-${safeId(url)}`);
+    if (activeRow) activeRow.style.background = '#2c2c2c';
+
     try {
         const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
         const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
@@ -300,20 +322,29 @@ async function loadFeedPosts(url, feedName = '') {
         items.forEach(item => {
             const title = item.querySelector('title')?.textContent || 'Kein Titel';
             let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
+            if (link === '#' && item.querySelector('link[rel="alternate"]')) {
+                link = item.querySelector('link[rel="alternate"]').getAttribute('href');
+            }
             const desc = item.querySelector('description, summary, media\\:description')?.textContent || '';
             const encoded = item.querySelector('encoded')?.textContent || '';
             const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
             
-            // --- Thumbnail Extraction ---
+            // --- Thumbnail & Duration Extraction ---
             let thumbnail = '';
             const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
-            if (ytId) thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
-            if (!thumbnail) {
+            let durationStr = '';
+            
+            if (ytId) {
+                thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
+                const cachedDuration = userData.duration_cache[ytId];
+                durationStr = cachedDuration ? cachedDuration : 'Video';
+            } else {
                 const mediaContent = item.getElementsByTagName('media:content')[0] || item.getElementsByTagName('content')[0];
                 if (mediaContent && mediaContent.getAttribute('url')) thumbnail = mediaContent.getAttribute('url');
                 const fullText = desc + encoded;
-                const imgMatch = fullText.match(/<img[^>]+src="([^">]+)"/i);
+                const imgMatch = fullText.match(/<img[^+]+src="([^">]+)"/i);
                 if (imgMatch && imgMatch[1]) thumbnail = imgMatch[1];
+                durationStr = `${calculateReadingTime(desc+encoded)} min read`;
             }
 
             const row = document.createElement('div'); 
@@ -331,7 +362,7 @@ async function loadFeedPosts(url, feedName = '') {
                     </a>
                     <div class="post-meta">
                         <span>${getRelativeTime(pubDate)}</span>
-                        <span style="margin-left:auto; color:#555;">(${calculateReadingTime(desc+encoded)} min read)</span>
+                        <span style="margin-left:auto; color:#555;">(${durationStr})</span>
                     </div>
                 </div>
                 <div class="post-actions" style="display:flex; gap:5px;">
@@ -375,9 +406,7 @@ async function markFeedAsRead(feedUrl) {
     });
 
     if (changed) {
-        // Sidebar Zähler auf 0 setzen
-        const activeFeedRow = document.querySelector('.sidebar-item-row[style*="background"]');
-        const countEl = activeFeedRow ? activeFeedRow.querySelector('.unread-count') : null;
+        const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
         if (countEl) countEl.style.display = 'none';
 
         try {
@@ -392,18 +421,51 @@ async function markAsUnread(link, row) {
     row.querySelector('.post-title').style.fontWeight = '600';
     row.querySelector('.unread-btn').style.display = 'none';
 
-    // Counter in Sidebar wieder erhöhen
-    const activeFeedRow = document.querySelector('.sidebar-item-row[style*="background"]');
-    const countEl = activeFeedRow ? activeFeedRow.querySelector('.unread-count') : null;
-    if (countEl) {
-        let count = parseInt(countEl.innerText) || 0;
-        countEl.innerText = count + 1;
-        countEl.style.display = 'inline-block';
+    if (currentFeedUrl) {
+        const countEl = document.querySelector(`#sidebar-feed-${safeId(currentFeedUrl)} .unread-count`);
+        if (countEl) {
+            let count = parseInt(countEl.innerText) || 0;
+            countEl.innerText = count + 1;
+            countEl.style.display = 'inline-block';
+        }
     }
 
     try {
         await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
     } catch (e) { console.error("Sync Mark As Unread Error:", e); }
+}
+
+async function markAsRead(link) {
+    if (!userData.read_links.includes(link)) {
+        userData.read_links.push(link);
+        
+        const rows = document.querySelectorAll('.post-row');
+        rows.forEach(row => {
+            if (row.dataset.link === link) {
+                row.style.opacity = '0.5';
+                const title = row.querySelector('.post-title');
+                if (title) title.style.fontWeight = 'normal';
+                const unreadBtn = row.querySelector('.unread-btn');
+                if (unreadBtn) unreadBtn.style.display = 'flex';
+            }
+        });
+
+        if (currentFeedUrl) {
+            const countEl = document.querySelector(`#sidebar-feed-${safeId(currentFeedUrl)} .unread-count`);
+            if (countEl) {
+                let count = parseInt(countEl.innerText) || 0;
+                if (count > 0) {
+                    count--;
+                    countEl.innerText = count;
+                    if (count === 0) countEl.style.display = 'none';
+                }
+            }
+        }
+
+        try {
+            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+        } catch (e) { console.error("Sync Read Status Error:", e); }
+    }
 }
 
 async function toggleFavorite(link, btn) {
@@ -432,7 +494,6 @@ async function openReader(post) {
     
     const isYouTube = post.link.includes('youtube.com') || post.link.includes('youtu.be');
 
-    // Header mit Thumbnail und Original-Link
     body.innerHTML = `
         <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:30px; border-bottom:1px solid #333; padding-bottom:20px;">
             ${post.thumbnail ? `<img src="${post.thumbnail}" style="width:120px; height:80px; object-fit:cover; border-radius:8px; border:1px solid #444;">` : ''}
@@ -528,50 +589,6 @@ function sanitizeReaderContent(html) {
     });
 
     return div.innerHTML;
-}
-
-async function markAsRead(link) {
-    if (!userData.read_links.includes(link)) {
-        userData.read_links.push(link);
-        
-        // 1. UI Update in der Liste: Fade Row + Show Unread Button
-        const rows = document.querySelectorAll('.post-row');
-        rows.forEach(row => {
-            if (row.dataset.link === link) {
-                row.style.opacity = '0.5';
-                const title = row.querySelector('.post-title');
-                if (title) title.style.fontWeight = 'normal';
-                
-                const unreadBtn = row.querySelector('.unread-btn');
-                if (unreadBtn) unreadBtn.style.display = 'flex';
-            }
-        });
-
-        // 2. Echtzeit-Counter Dekrementierung in der Sidebar
-        // Wir suchen das Sidebar-Element anhand des aktiven Feed-Zustands oder der ID, falls bekannt
-        const sidebarItems = document.querySelectorAll('.sidebar-item-row');
-        sidebarItems.forEach(sRow => {
-            // Wenn der Feed gerade aktiv ist (Hintergrund-Check) dekrementieren wir
-            if (sRow.style.background.includes('rgb') || sRow.classList.contains('active')) {
-                const countEl = sRow.querySelector('.unread-count');
-                if (countEl) {
-                    let count = parseInt(countEl.innerText) || 0;
-                    if (count > 0) {
-                        count--;
-                        countEl.innerText = count;
-                        if (count === 0) countEl.style.display = 'none';
-                    }
-                }
-            }
-        });
-
-        // Sync to Supabase
-        try {
-            await db.from('user_settings')
-                .update({ read_links: userData.read_links })
-                .eq('id', currentUser.id);
-        } catch (e) { console.error("Sync Read Status Error:", e); }
-    }
 }
 
 function closeReader() { document.getElementById('reader-overlay').style.display = 'none'; document.body.style.overflow = 'auto'; }
