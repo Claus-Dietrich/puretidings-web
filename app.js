@@ -201,19 +201,23 @@ function setupResizer() {
 
 // --- SIDEBAR & COUNTERS ---
 
-function safeId(str) {
-    if (!str) return 'id-unknown';
-    // Normalisierung: Trailing slash entfernen
-    const normalizedUrl = str.replace(/\/$/, '');
+function getFeedId(url) {
+    if (!url) return 'id-unknown';
+    // Normalisierung: Trailing slash entfernen und URL trimmen
+    const normalizedUrl = url.trim().replace(/\/$/, '');
     
     // Für YouTube URLs: Nur die Channel ID extrahieren, da Query-Params variieren können
     if (normalizedUrl.includes('youtube.com/feeds')) {
         const match = normalizedUrl.match(/channel_id=([^&]+)/);
         if (match) return 'yt-' + match[1];
     }
-    try { return 'id-' + btoa(unescape(encodeURIComponent(normalizedUrl))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16); }
+    try { 
+        return 'id-' + btoa(unescape(encodeURIComponent(normalizedUrl))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16); 
+    }
     catch(e) { return 'id-' + Math.random().toString(36).substr(2, 8); }
 }
+
+function safeId(str) { return getFeedId(str); }
 
 function renderSidebar(tree) {
     const container = document.getElementById('feed-tree-container');
@@ -258,11 +262,10 @@ function renderSidebar(tree) {
                 parentEl.appendChild(childrenContainer);
                 walk(n.children || [], childrenContainer, level + 1);
             } else if (n.type === 'feed' && n.url) {
-                const id = safeId(n.url);
+                const id = getFeedId(n.url);
                 li.id = `sidebar-feed-${id}`;
                 const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${new URL(n.url).hostname}`;
                 li.innerHTML = `<img src="${favicon}" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span><span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>`;
-                console.log("Feed gerendert:", n.name, li.querySelector('.unread-count'));
                 li.onclick = () => loadFeedPosts(n.url, n.name);
                 parentEl.appendChild(li);
             }
