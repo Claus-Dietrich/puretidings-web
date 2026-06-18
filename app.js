@@ -394,6 +394,8 @@ async function openReader(post) {
     const body = document.getElementById('reader-body');
     overlay.style.display = 'block'; document.body.style.overflow = 'hidden';
     
+    const isYouTube = post.link.includes('youtube.com') || post.link.includes('youtu.be');
+
     // Header mit Thumbnail und Original-Link
     body.innerHTML = `
         <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:30px; border-bottom:1px solid #333; padding-bottom:20px;">
@@ -405,10 +407,35 @@ async function openReader(post) {
                 </a>
             </div>
         </div>
-        <div class="spinner"></div>
+        <div id="reader-inner-content">
+            <div class="spinner"></div>
+        </div>
     `;
     
     markAsRead(post.link);
+
+    const innerContent = body.querySelector('#reader-inner-content');
+
+    // YouTube Sonderbehandlung: Kein Fetch nötig, wir zeigen direkt das Vorschaubild/Embed-Ersatz
+    if (isYouTube) {
+        let ytId = '';
+        try {
+            const url = new URL(post.link);
+            if (url.hostname.includes('youtu.be')) ytId = url.pathname.substring(1);
+            else ytId = url.searchParams.get('v') || url.pathname.split('/').pop();
+        } catch(e) {}
+        
+        if (ytId) {
+            innerContent.innerHTML = `
+                <div style="margin:20px 0; position:relative; cursor:pointer;" onclick="window.open('https://www.youtube.com/watch?v=${ytId}', '_blank')">
+                    <img src="https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;" onerror="this.src='https://i.ytimg.com/vi/${ytId}/mqdefault.jpg'">
+                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:40px; border:2px solid white;">▶</div>
+                </div>
+                <p style="text-align:center; color:#888; font-size:14px;">Klicke auf das Vorschaubild, um das Video auf YouTube zu starten.</p>
+            `;
+            return;
+        }
+    }
 
     try {
         const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: post.link }) });
@@ -423,17 +450,9 @@ async function openReader(post) {
         if (reader) {
             let content = reader.content;
             content = sanitizeReaderContent(content);
-            const spinner = body.querySelector('.spinner');
-            if (spinner) spinner.remove();
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.style.fontSize = '16px';
-            contentDiv.style.lineHeight = '1.7';
-            contentDiv.style.color = '#eee';
-            contentDiv.innerHTML = content;
-            body.appendChild(contentDiv);
+            innerContent.innerHTML = `<div style="font-size:16px; line-height:1.7; color:#eee;">${content}</div>`;
         }
-    } catch (e) { body.innerHTML += `<div style="color:red; margin-top:20px;">Fehler: ${e.message}</div>`; }
+    } catch (e) { innerContent.innerHTML = `<div style="color:red; margin-top:20px;">Fehler beim Laden des Inhalts: ${e.message}</div>`; }
 }
 
 function sanitizeReaderContent(html) {
@@ -479,16 +498,27 @@ async function markAsRead(link) {
     if (!userData.read_links.includes(link)) {
         userData.read_links.push(link);
         
-        // UI Update: Find the row and fade it
+        // 1. UI Update in der Liste: Fade Row
         const rows = document.querySelectorAll('.post-row');
         rows.forEach(row => {
-            // This is a bit expensive but reliable for a prototype
             if (row.innerHTML.includes(link)) {
                 row.style.opacity = '0.5';
                 const title = row.querySelector('.post-title');
                 if (title) title.style.fontWeight = 'normal';
             }
         });
+
+        // 2. Echtzeit-Counter Dekrementierung in der Sidebar
+        const activeFeedRow = document.querySelector('.sidebar-item-row[style*="background"]'); // Naive Suche nach dem aktiven Feed
+        const countEl = activeFeedRow ? activeFeedRow.querySelector('.unread-count') : null;
+        if (countEl) {
+            let count = parseInt(countEl.innerText) || 0;
+            if (count > 0) {
+                count--;
+                countEl.innerText = count;
+                if (count === 0) countEl.style.display = 'none';
+            }
+        }
 
         // Sync to Supabase
         try {
