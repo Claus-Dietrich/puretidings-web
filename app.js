@@ -8,6 +8,7 @@ let currentFeedUrl = null;
 let userData = {
     feed_tree: [],
     favorited_links: [],
+    summary_links: [],
     read_links: [],
     duration_cache: {}
 };
@@ -146,6 +147,7 @@ async function loadApp(user) {
             userData = {
                 feed_tree: data.feed_tree || [],
                 favorited_links: data.favorited_links || [],
+                summary_links: data.summary_links || [],
                 read_links: data.read_links || [],
                 duration_cache: data.duration_cache || {}
             };
@@ -173,6 +175,11 @@ function checkProStatus(data) {
 
 function safeId(str) {
     if (!str) return 'id-unknown';
+    // Für YouTube URLs: Nur die Channel ID extrahieren, da Query-Params variieren können
+    if (str.includes('youtube.com/feeds')) {
+        const match = str.match(/channel_id=([^&]+)/);
+        if (match) return 'yt-' + match[1];
+    }
     try { return 'id-' + btoa(unescape(encodeURIComponent(str))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16); }
     catch(e) { return 'id-' + Math.random().toString(36).substr(2, 8); }
 }
@@ -259,8 +266,9 @@ async function calculateAllUnreadCounts() {
             let unread = 0;
             items.forEach(item => {
                 let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href');
-                if (!link && item.querySelector('link[rel="alternate"]')) {
-                    link = item.querySelector('link[rel="alternate"]').getAttribute('href');
+                if (!link || link === '') {
+                    const altLink = item.querySelector('link[rel="alternate"]');
+                    if (altLink) link = altLink.getAttribute('href');
                 }
                 if (link && !userData.read_links.includes(link)) unread++;
             });
@@ -276,7 +284,7 @@ async function calculateAllUnreadCounts() {
                 }
             }
         } catch (e) { console.error("Error counting unread for", feed.url, e); }
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 150));
     }
 }
 
@@ -290,6 +298,8 @@ function getRelativeTime(dateStr) {
     if (diff < 60) return 'just now';
     if (diff < 3600) return Math.floor(diff / 60) + ' min. ago';
     if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
+    const days = Math.floor(diff / 86400);
+    if (days < 30) return days + (days === 1 ? ' day ago' : ' days ago');
     return then.toLocaleDateString();
 }
 
@@ -322,7 +332,7 @@ async function loadFeedPosts(url, feedName = '') {
         items.forEach(item => {
             const title = item.querySelector('title')?.textContent || 'Kein Titel';
             let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
-            if (link === '#' && item.querySelector('link[rel="alternate"]')) {
+            if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
                 link = item.querySelector('link[rel="alternate"]').getAttribute('href');
             }
             const desc = item.querySelector('description, summary, media\\:description')?.textContent || '';
@@ -342,7 +352,7 @@ async function loadFeedPosts(url, feedName = '') {
                 const mediaContent = item.getElementsByTagName('media:content')[0] || item.getElementsByTagName('content')[0];
                 if (mediaContent && mediaContent.getAttribute('url')) thumbnail = mediaContent.getAttribute('url');
                 const fullText = desc + encoded;
-                const imgMatch = fullText.match(/<img[^+]+src="([^">]+)"/i);
+                const imgMatch = fullText.match(/<img[^>]+src="([^">]+)"/i);
                 if (imgMatch && imgMatch[1]) thumbnail = imgMatch[1];
                 durationStr = `${calculateReadingTime(desc+encoded)} min read`;
             }
@@ -352,6 +362,7 @@ async function loadFeedPosts(url, feedName = '') {
             row.dataset.link = link;
             const isRead = userData.read_links.includes(link);
             const isFav = userData.favorited_links.includes(link);
+            const isSum = userData.summary_links && userData.summary_links.includes(link);
             if (isRead) row.style.opacity = '0.5';
             
             row.innerHTML = `
@@ -367,6 +378,7 @@ async function loadFeedPosts(url, feedName = '') {
                 </div>
                 <div class="post-actions" style="display:flex; gap:5px;">
                     <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
+                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="color:${isSum ? '#ff9800' : 'white'} !important">${isSum ? '🧡' : '📝'}</button>
                     <button class="action-btn reader-btn" title="Reader">👓</button>
                     <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
                     <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
@@ -376,6 +388,10 @@ async function loadFeedPosts(url, feedName = '') {
             row.querySelector('.fav-btn').onclick = (e) => {
                 e.preventDefault(); e.stopPropagation();
                 toggleFavorite(link, row.querySelector('.fav-btn'));
+            };
+            row.querySelector('.sum-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                toggleSummary(link, row.querySelector('.sum-btn'));
             };
             row.querySelector('.reader-btn').onclick = (e) => {
                 e.preventDefault(); e.stopPropagation();
@@ -485,6 +501,25 @@ async function toggleFavorite(link, btn) {
             .update({ favorited_links: userData.favorited_links })
             .eq('id', currentUser.id);
     } catch (e) { console.error("Sync Favorite Error:", e); }
+}
+
+async function toggleSummary(link, btn) {
+    const isSum = userData.summary_links.includes(link);
+    if (isSum) {
+        userData.summary_links = userData.summary_links.filter(l => l !== link);
+        btn.innerText = '📝';
+        btn.style.setProperty('color', 'white', 'important');
+    } else {
+        userData.summary_links.push(link);
+        btn.innerText = '🧡';
+        btn.style.setProperty('color', '#ff9800', 'important');
+    }
+
+    try {
+        await db.from('user_settings')
+            .update({ summary_links: userData.summary_links })
+            .eq('id', currentUser.id);
+    } catch (e) { console.error("Sync Summary Error:", e); }
 }
 
 async function openReader(post) {
