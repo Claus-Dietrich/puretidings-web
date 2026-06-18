@@ -231,6 +231,7 @@ function renderSidebar(tree) {
                 li.id = `sidebar-feed-${id}`;
                 const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${new URL(n.url).hostname}`;
                 li.innerHTML = `<img src="${favicon}" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span><span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>`;
+                console.log("Feed gerendert:", n.name, li.querySelector('.unread-count'));
                 li.onclick = () => loadFeedPosts(n.url, n.name);
                 parentEl.appendChild(li);
             }
