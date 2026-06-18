@@ -211,8 +211,10 @@ function getFeedId(url) {
         const match = normalizedUrl.match(/channel_id=([^&]+)/);
         if (match) return 'yt-' + match[1];
     }
+    
+    // EINZIGARTIGE ID ERZEUGEN: Verwende den Base64 des gesamten Pfades, nicht nur der ersten 16 Zeichen
     try { 
-        return 'id-' + btoa(unescape(encodeURIComponent(normalizedUrl))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16); 
+        return 'id-' + btoa(unescape(encodeURIComponent(normalizedUrl))).replace(/[^a-zA-Z0-9]/g, '');
     }
     catch(e) { return 'id-' + Math.random().toString(36).substr(2, 8); }
 }
