@@ -300,9 +300,38 @@ async function loadFeedPosts(url, feedName = '') {
             const desc = item.querySelector('description, summary, media\\:description')?.textContent || '';
             const encoded = item.querySelector('encoded')?.textContent || '';
             const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
+            
+            // --- Erweiterte Thumbnail Extraktion ---
             let thumbnail = '';
+            
+            // 1. YouTube
             const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
             if (ytId) thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
+            
+            // 2. Media Tags (media:content, media:thumbnail)
+            if (!thumbnail) {
+                const mediaContent = item.getElementsByTagName('media:content')[0] || item.getElementsByTagName('content')[0];
+                if (mediaContent && mediaContent.getAttribute('url')) {
+                    thumbnail = mediaContent.getAttribute('url');
+                } else {
+                    const mediaThumb = item.getElementsByTagName('media:thumbnail')[0] || item.getElementsByTagName('thumbnail')[0];
+                    if (mediaThumb && mediaThumb.getAttribute('url')) thumbnail = mediaThumb.getAttribute('url');
+                }
+            }
+            
+            // 3. Enclosure (für Podcasts oder einige RSS Feeds)
+            if (!thumbnail) {
+                const enclosure = item.querySelector('enclosure[type^="image/"]');
+                if (enclosure) thumbnail = enclosure.getAttribute('url');
+            }
+            
+            // 4. Extraktion aus dem Content/Beschreibung (Regex Suche nach <img>)
+            if (!thumbnail) {
+                const fullText = desc + encoded;
+                const imgMatch = fullText.match(/<img[^>]+src="([^">]+)"/i);
+                if (imgMatch && imgMatch[1]) thumbnail = imgMatch[1];
+            }
+
             const row = document.createElement('div'); row.className = 'post-row';
             const isRead = userData.read_links.includes(link);
             const isFav = userData.favorited_links.includes(link);
