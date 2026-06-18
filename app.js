@@ -300,6 +300,8 @@ function getRelativeTime(dateStr) {
     if (diff < 86400) return Math.floor(diff / 3600) + ' hours ago';
     const days = Math.floor(diff / 86400);
     if (days < 30) return days + (days === 1 ? ' day ago' : ' days ago');
+    const months = Math.floor(days / 30);
+    if (months < 12) return months + (months === 1 ? ' month ago' : ' months ago');
     return then.toLocaleDateString();
 }
 
@@ -558,12 +560,14 @@ async function openReader(post) {
         
         if (ytId) {
             innerContent.innerHTML = `
-                <div style="margin:20px 0; position:relative; cursor:pointer;" onclick="window.open('https://www.youtube.com/watch?v=${ytId}', '_blank')">
-                    <img src="https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;" onerror="this.src='https://i.ytimg.com/vi/${ytId}/mqdefault.jpg'">
-                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:40px; border:2px solid white;">▶</div>
-                </div>
+                <a href="https://www.youtube.com/watch?v=${ytId}" target="_blank" style="text-decoration:none; display:block;">
+                    <div style="margin:20px 0; position:relative; cursor:pointer;">
+                        <img src="https://i.ytimg.com/vi/${ytId}/hqdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;">
+                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:40px; border:2px solid white;">▶</div>
+                    </div>
+                </a>
                 <div style="margin-top:20px; color:#ccc; font-size:15px; line-height:1.6; white-space:pre-wrap;">${post.desc || 'Keine Beschreibung verfügbar.'}</div>
-                <p style="text-align:center; color:#555; font-size:13px; margin-top:30px;">Klicke auf das Vorschaubild, um das Video auf YouTube zu starten.</p>
+                <p style="text-align:center; color:#555; font-size:13px; margin-top:30px;">Klicke auf das Vorschaubild, um das Video zu starten (öffnet ggf. die YouTube App).</p>
             `;
             return;
         }
