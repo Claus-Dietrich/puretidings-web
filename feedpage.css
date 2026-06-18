@@ -23,10 +23,16 @@ body {
   color: var(--text-color);
 }
 
-/* --- New Page Layout --- */
-.page-layout {
-  display: flex;
-  height: 100vh;
+#sidebar-resizer {
+    width: 6px;
+    background: #333;
+    cursor: col-resize;
+    z-index: 10;
+    transition: background 0.2s;
+}
+
+#sidebar-resizer:hover, #sidebar-resizer:active {
+    background: var(--primary-orange, #ff9800);
 }
 
 .sidebar {
