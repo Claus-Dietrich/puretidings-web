@@ -330,7 +330,15 @@ async function loadFeedPosts(url, feedName = '') {
     if (activeRow) activeRow.style.background = '#2c2c2c';
 
     try {
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+        const { data: { session } } = await db.auth.getSession();
+        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`
+            }, 
+            body: JSON.stringify({ url }) 
+        });
         const xmlStr = await res.text();
         let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
         
