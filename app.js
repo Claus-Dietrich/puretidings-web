@@ -171,6 +171,34 @@ function checkProStatus(data) {
     }
 }
 
+// --- SIDEBAR RESIZER ---
+function setupResizer() {
+    const resizer = document.getElementById('sidebar-resizer');
+    const sidebar = document.getElementById('feed-tree-container');
+    
+    if (!resizer || !sidebar) return;
+
+    let isResizing = false;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const newWidth = e.clientX;
+        if (newWidth > 150 && newWidth < 800) {
+            sidebar.style.width = `${newWidth}px`;
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        isResizing = false;
+        document.body.style.cursor = 'default';
+    });
+}
+
 // --- SIDEBAR & COUNTERS ---
 
 function safeId(str) {
