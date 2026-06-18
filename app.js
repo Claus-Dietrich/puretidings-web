@@ -513,7 +513,7 @@ async function toggleSummary(link, btn) {
         btn.style.setProperty('color', 'white', 'important');
     } else {
         userData.summary_links.push(link);
-        btn.style.setProperty('color', '#28a745', 'important');
+        btn.style.setProperty('color', '#00ff00', 'important');
     }
 
     try {
