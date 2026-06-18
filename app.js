@@ -319,11 +319,14 @@ async function calculateAllUnreadCounts() {
                     const altLink = item.querySelector('link[rel="alternate"]');
                     if (altLink) link = altLink.getAttribute('href');
                 }
-                // Bei HTML-Fallback: Filtere nach relevanten RSS-ähnlichen Links
-                if (link && !userData.read_links.includes(link) && (link.startsWith('http') || link.startsWith('/'))) unread++;
+                
+                // Nur Posts zählen, die im aktuellen XML-Feed enthalten sind und noch nicht gelesen wurden
+                if (link && !userData.read_links.includes(link)) {
+                    unread++;
+                }
             });
             
-            console.log(`Feed ${feed.name} (${feed.url}) hat ${items.length} Items und ${unread} ungelesene.`);
+            console.log(`Feed ${feed.name} (${feed.url}) hat ${items.length} Items im Feed und ${unread} davon sind ungelesen.`);
             
             const id = safeId(feed.url);
             const countEl = document.querySelector(`#sidebar-feed-${id} .unread-count`);
