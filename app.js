@@ -494,7 +494,9 @@ async function loadFeedPosts(url, feedName = '') {
             if (isRead) row.style.opacity = '0.5';
             
             row.innerHTML = `
-                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+                <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                    <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+                </a>
                 <div class="post-info">
                     <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
                         ${title}
