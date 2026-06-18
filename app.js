@@ -203,12 +203,15 @@ function setupResizer() {
 
 function safeId(str) {
     if (!str) return 'id-unknown';
+    // Normalisierung: Trailing slash entfernen
+    const normalizedUrl = str.replace(/\/$/, '');
+    
     // Für YouTube URLs: Nur die Channel ID extrahieren, da Query-Params variieren können
-    if (str.includes('youtube.com/feeds')) {
-        const match = str.match(/channel_id=([^&]+)/);
+    if (normalizedUrl.includes('youtube.com/feeds')) {
+        const match = normalizedUrl.match(/channel_id=([^&]+)/);
         if (match) return 'yt-' + match[1];
     }
-    try { return 'id-' + btoa(unescape(encodeURIComponent(str))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16); }
+    try { return 'id-' + btoa(unescape(encodeURIComponent(normalizedUrl))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16); }
     catch(e) { return 'id-' + Math.random().toString(36).substr(2, 8); }
 }
 
