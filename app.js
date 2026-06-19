@@ -1009,148 +1009,69 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
 
     posts.forEach(post => {
         const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
+        const row = document.createElement('div'); 
+        row.className = 'post-row';
+        row.dataset.link = link;
+        row.postData = post; // Attach post data for search/copy/AI summary
+        
         const isRead = userData.read_links.includes(link);
         const isFav = userData.favorited_links.includes(link);
         const isSum = userData.summary_links && userData.summary_links.includes(link);
-
-        if (isSummaryOrFavorites) {
-            // Render as .post-item matching Chrome Extension style
-            const item = document.createElement('div');
-            item.className = 'post-item';
-            item.dataset.link = link;
-            item.postData = post; // Attach post data for copy/save logic
-            
-            if (isRead) {
-                item.classList.add('read');
-            }
-
-            // Thumbnail
-            let imgHtml = '';
-            if (thumbnail) {
-                imgHtml = `<img src="${thumbnail}" class="post-thumbnail" onerror="this.style.display='none';">`;
-            }
-
-            // Actions Wrapper
-            let actionsHtml = `
-                <button class="read-mode-btn" title="In Reader-Modus öffnen">👓</button>
-                <button class="favorite-btn ${isFav ? 'favorited' : ''}" title="${isFav ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}">
-                    ${isFav ? '★' : '☆'}
-                </button>
-                <button class="summary-btn ${isSum ? 'active' : ''}" title="${isSum ? 'Aus Zusammenfassung entfernen' : 'Zur Zusammenfassung hinzufügen'}">
-                    📋
-                </button>
-                <button class="mark-unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'inline-block' : 'none'}">↩</button>
-            `;
-
-            item.innerHTML = `
-                ${imgHtml}
-                <div class="post-content-wrapper">
-                    <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none;">
-                        ${title}
-                    </a>
-                    
-                    <!-- Legacy 300 char snippet for summary cart in list mode -->
-                    <div class="summary-item-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'list') ? 'block' : 'none'}; font-size: 14px; color: var(--text-color); opacity: 0.8; margin-bottom: 8px; line-height: 1.4;">
-                        ${desc ? desc.replace(/<[^>]+>/g, ' ').substring(0, 300) + '...' : ''}
-                    </div>
-
-                    <!-- Inline full report view -->
-                    <div class="report-inline-description" style="display: ${summarySubMode === 'report' ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6;">
-                        <hr style="border:0; border-top:1px solid var(--border-color, #333); margin-bottom:15px;">
-                        ${desc || ''}
-                    </div>
-
-                    <div class="post-meta">
-                        <p class="post-date">${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</p>
-                        <div class="post-actions">
-                            ${actionsHtml}
-                            <a href="${link}" target="_blank" class="action-btn" title="Original öffnen" style="text-decoration:none; width:auto; height:auto; background:none; border:none; font-size:18px; margin-left:5px;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Event Listeners
-            item.querySelector('.post-title').onclick = (e) => {
-                e.preventDefault();
-                markAsRead(link);
-                item.classList.add('flipping-out');
-                setTimeout(() => {
-                    window.open(link, '_blank');
-                    setTimeout(() => item.classList.remove('flipping-out'), 1000);
-                }, 500);
-            };
-
-            item.querySelector('.favorite-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleFavorite(link, item.querySelector('.favorite-btn'));
-            };
-
-            item.querySelector('.summary-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleSummary(link, item.querySelector('.summary-btn'));
-            };
-
-            item.querySelector('.read-mode-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                openReader({title, link, desc, thumbnail});
-            };
-
-            item.querySelector('.mark-unread-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                markAsUnread(link, item);
-            };
-
-            container.appendChild(item);
-        } else {
-            // Render as .post-row (default layout for normal feeds)
-            const row = document.createElement('div'); 
-            row.className = 'post-row';
-            row.dataset.link = link;
-            row.postData = post; // Attach post data for search
-            if (isRead) row.style.opacity = '0.5';
-            
-            row.innerHTML = `
-                <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                    <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+        
+        if (isRead) row.style.opacity = '0.5';
+        
+        row.innerHTML = `
+            <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+            </a>
+            <div class="post-info">
+                <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                    ${title}
                 </a>
-                <div class="post-info">
-                    <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                        ${title}
-                    </a>
-                    <div class="post-meta">
-                        <span>${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</span>
-                        <span style="margin-left:auto; color:#555;">(${durationStr})</span>
-                    </div>
+                
+                <!-- Legacy 300 char snippet for summary cart in list mode -->
+                <div class="summary-item-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'list') ? 'block' : 'none'}; font-size: 13px; color: #aaa; margin: 8px 0; line-height: 1.4;">
+                    ${desc ? desc.replace(/<[^>]+>/g, ' ').substring(0, 300) + '...' : ''}
                 </div>
-                <div class="post-actions" style="display:flex; gap:5px;">
-                    <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
-                    <button class="action-btn reader-btn" title="Reader">👓</button>
-                    <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
-                    <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
-                </div>
-            `;
-            
-            row.querySelector('.fav-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleFavorite(link, row.querySelector('.fav-btn'));
-            };
-            row.querySelector('.sum-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleSummary(link, row.querySelector('.sum-btn'));
-            };
-            row.querySelector('.reader-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                openReader({title, link, desc, thumbnail});
-            };
-            row.querySelector('.unread-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                markAsUnread(link, row);
-            };
 
-            container.appendChild(row);
-        }
+                <!-- Inline full report view -->
+                <div class="report-inline-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
+                    <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
+                    ${desc || ''}
+                </div>
+
+                <div class="post-meta">
+                    <span>${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</span>
+                    <span style="margin-left:auto; color:#555;">(${durationStr})</span>
+                </div>
+            </div>
+            <div class="post-actions" style="display:flex; gap:5px;">
+                <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
+                <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
+                <button class="action-btn reader-btn" title="Reader">👓</button>
+                <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
+                <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
+            </div>
+        `;
+        
+        row.querySelector('.fav-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            toggleFavorite(link, row.querySelector('.fav-btn'));
+        };
+        row.querySelector('.sum-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            toggleSummary(link, row.querySelector('.sum-btn'));
+        };
+        row.querySelector('.reader-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            openReader({title, link, desc, thumbnail});
+        };
+        row.querySelector('.unread-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            markAsUnread(link, row);
+        };
+
+        container.appendChild(row);
     });
 }
 
