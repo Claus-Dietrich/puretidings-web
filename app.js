@@ -1603,6 +1603,81 @@ async function clearSummaryList() {
     }
 }
 
+async function getYouTubeTranscript(url) {
+    let videoId = '';
+    if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/watch')) {
+        try {
+            videoId = new URL(url).searchParams.get('v');
+        } catch (e) {
+            const match = url.match(/[?&]v=([^&#]+)/);
+            videoId = match ? match[1] : '';
+        }
+    } else if (url.includes('youtube.com/shorts/')) {
+        videoId = url.split('youtube.com/shorts/')[1].split('?')[0];
+    }
+
+    if (!videoId) return null;
+
+    try {
+        const proxyUrl = 'https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed';
+        const sessionRes = await db.auth.getSession();
+        const session = sessionRes.data?.session;
+        if (!session) throw new Error("Keine aktive Sitzung");
+
+        const response = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` })
+        });
+
+        if (!response.ok) return null;
+        const html = await response.text();
+
+        const regex = /ytInitialPlayerResponse\s*=\s*({.+?});/;
+        const match = html.match(regex);
+        if (!match) return null;
+
+        const playerResponse = JSON.parse(match[1]);
+        const tracks = playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        if (!tracks || tracks.length === 0) return null;
+
+        let track = tracks.find(t => t.languageCode === 'de') || tracks.find(t => t.languageCode === 'en') || tracks[0];
+        if (!track || !track.baseUrl) return null;
+
+        const tResponse = await fetch(proxyUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ url: track.baseUrl })
+        });
+
+        if (!tResponse.ok) return null;
+        const xmlText = await tResponse.text();
+
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        let textNodes = Array.from(xmlDoc.getElementsByTagName('p'));
+        if (textNodes.length === 0) {
+            textNodes = Array.from(xmlDoc.getElementsByTagName('text'));
+        }
+
+        if (textNodes.length > 0) {
+            const texts = textNodes.map(t => t.textContent.replace(/<[^>]+>/g, ''));
+            return texts.join(' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"').substring(0, 50000);
+        }
+    } catch (e) {
+        console.error("Fehler beim Abrufen des YouTube-Transkripts über Proxy:", e);
+    }
+    return null;
+}
+
 async function openReader(post) {
     const overlay = document.getElementById('reader-overlay');
     const body = document.getElementById('reader-body');
@@ -1757,12 +1832,39 @@ async function openReader(post) {
         aiReportContent.innerHTML = '<p><em>Beitrag wird analysiert... bitte warten.</em></p>';
 
         try {
-            let promptText = "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.\n\n";
-            promptText += `### Article: ${post.title}\n`;
-            promptText += `URL: ${post.link}\n\n`;
-            
-            const bodyText = (post.desc || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
-            promptText += `Content:\n${bodyText}\n\n`;
+            let promptText = "";
+            let contentText = "";
+
+            if (isYouTube) {
+                aiReportContent.innerHTML = '<p><em>Hole Video-Skript (Transkript) und analysiere Video... bitte warten.</em></p>';
+                promptText = "You are an assistant that summarizes YouTube videos. Based on the following video description and transcript, create a short, concise summary in German. List the 3-5 most important key takeaways in bullet points in German. Ignore advertisements or sponsor mentions in the text.\n\n";
+                promptText += `### Video Title: ${post.title}\n`;
+                promptText += `URL: ${post.link}\n\n`;
+
+                const description = (post.desc || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 10000);
+                let transcriptText = "";
+                try {
+                    transcriptText = await getYouTubeTranscript(post.link);
+                } catch (e) {
+                    console.error("Transkript-Fehler in AI-Summary:", e);
+                }
+
+                contentText = `[Video Description / Beschreibung des Videos]:\n${description}\n\n`;
+                if (transcriptText) {
+                    contentText += `[Video Script / Transkript]:\n${transcriptText}\n\n`;
+                } else {
+                    contentText += `(Note: Video transcript could not be loaded. Summarizing based on description only.)\n\n`;
+                }
+            } else {
+                promptText = "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.\n\n";
+                promptText += `### Article: ${post.title}\n`;
+                promptText += `URL: ${post.link}\n\n`;
+
+                const bodyText = (post.desc || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
+                contentText = bodyText;
+            }
+
+            promptText += `Content:\n${contentText}\n\n`;
 
             const modelsToTry = await getAvailableGeminiModels(geminiApiKey);
             let response = null;
