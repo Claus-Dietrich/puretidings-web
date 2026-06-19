@@ -88,6 +88,32 @@ async function init() {
     document.getElementById('login-btn').onclick = handleLogin;
     document.getElementById('logout-btn').onclick = handleLogout;
     
+    // Settings Events
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsOverlay = document.getElementById('settings-overlay');
+    const settingsClose = document.getElementById('settings-close');
+    const settingsSave = document.getElementById('settings-save-btn');
+    const settingsGeminiKey = document.getElementById('settings-gemini-key');
+
+    if (settingsBtn && settingsOverlay) {
+        settingsBtn.onclick = () => {
+            settingsGeminiKey.value = localStorage.getItem('gemini_api_key') || '';
+            settingsOverlay.style.display = 'flex';
+        };
+    }
+    if (settingsClose && settingsOverlay) {
+        settingsClose.onclick = () => {
+            settingsOverlay.style.display = 'none';
+        };
+    }
+    if (settingsSave && settingsOverlay) {
+        settingsSave.onclick = () => {
+            localStorage.setItem('gemini_api_key', settingsGeminiKey.value.trim());
+            settingsOverlay.style.display = 'none';
+            alert("Einstellungen gespeichert!");
+        };
+    }
+
     // Enter-Key Support
     const emailInput = document.getElementById('email-input');
     const passInput = document.getElementById('password-input');
@@ -1013,7 +1039,6 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 <div style="border-left:1px solid #333; height:20px; margin:0 5px;"></div>
                 
                 <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <input type="password" id="web-gemini-key" placeholder="Gemini API Key" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:6px 12px; border-radius:4px; font-size:12px; width:140px; outline:none;" />
                     <button id="web-ai-report" class="secondary-btn" style="background:#ff9800; border:1px solid #e68a00; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Zusammenfassen 🤖</button>
                     <button id="web-full-view-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
@@ -1072,14 +1097,6 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         if (exportFormatSel) {
             exportFormatSel.onchange = (e) => {
                 exportFormatVal = e.target.value;
-            };
-        }
-
-        const keyInput = document.getElementById('web-gemini-key');
-        if (keyInput) {
-            keyInput.value = localStorage.getItem('gemini_api_key') || '';
-            keyInput.onchange = (e) => {
-                localStorage.setItem('gemini_api_key', e.target.value.trim());
             };
         }
         
@@ -1593,7 +1610,43 @@ async function openReader(post) {
     
     const isYouTube = post.link.includes('youtube.com') || post.link.includes('youtu.be');
 
+    const isFav = userData.favorited_links.includes(post.link);
+    const isSum = userData.summary_links && userData.summary_links.includes(post.link);
+
     body.innerHTML = `
+        <!-- Reader Toolbar -->
+        <div id="reader-toolbar" style="display:flex; align-items:center; gap:10px; margin-bottom:20px; border-bottom:1px solid #333; padding-bottom:15px; flex-wrap:wrap;">
+            <select id="reader-export-format" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none;">
+                <option value="txt">TXT</option>
+                <option value="markdown">Markdown</option>
+                <option value="html">HTML</option>
+            </select>
+            <button id="reader-copy-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Copy</button>
+            <button id="reader-save-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Save</button>
+            <button id="reader-star-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:${isFav ? 'gold' : 'white'} !important; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;" title="Add to favorites">${isFav ? '★' : '☆'}</button>
+            <button id="reader-summary-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;" title="Add to summary cart">📋</button>
+            <button id="reader-ai-summary-btn" class="secondary-btn" style="background:#ff9800; border:1px solid #e68a00; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">AI Summary</button>
+            <span id="reader-copy-status" style="font-size:12px; margin-left:8px;"></span>
+        </div>
+
+        <!-- Reader AI Report Container -->
+        <div id="reader-ai-report-container" class="hidden" style="margin-bottom: 20px; padding: 20px; background: #1e1e1e; border-radius: 8px; border: 1px solid #333;">
+           <div class="ai-report-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+               <h3 style="margin: 0; color: #ff9800; font-size: 16px;">AI Summary</h3>
+               <div style="display: flex; align-items: center; gap: 10px;">
+                   <select id="reader-export-ai-format" title="Export Format" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #444; background: #252525; color: white; font-size:12px;">
+                     <option value="txt">TXT</option>
+                     <option value="markdown">Markdown</option>
+                     <option value="html">HTML</option>
+                   </select>
+                   <button id="reader-copy-ai-report-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Copy</button>
+                   <button id="reader-download-ai-report-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Save</button>
+                   <button id="reader-close-ai-report-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; margin-left: 10px;">Close</button>
+               </div>
+           </div>
+           <div id="reader-ai-report-content" class="ai-report-body" style="line-height: 1.6; font-size: 14px; white-space: pre-wrap; color: #eee;"></div>
+        </div>
+
         <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom:30px; border-bottom:1px solid #333; padding-bottom:20px;">
             ${post.thumbnail ? `<img src="${post.thumbnail}" style="width:120px; height:80px; object-fit:cover; border-radius:8px; border:1px solid #444;">` : ''}
             <div style="flex:1;">
@@ -1609,6 +1662,183 @@ async function openReader(post) {
     `;
     
     markAsRead(post.link);
+
+    // Setup Toolbar Button Handlers
+    const starBtn = body.querySelector('#reader-star-btn');
+    starBtn.onclick = async () => {
+        const index = userData.favorited_links.indexOf(post.link);
+        if (index > -1) {
+            userData.favorited_links.splice(index, 1);
+            starBtn.style.color = 'white';
+            starBtn.innerText = '☆';
+        } else {
+            userData.favorited_links.push(post.link);
+            starBtn.style.color = 'gold';
+            starBtn.innerText = '★';
+        }
+        document.querySelectorAll('.post-row, .post-item').forEach(row => {
+            if (row.dataset.link === post.link) {
+                const rowFavBtn = row.querySelector('.fav-btn');
+                if (rowFavBtn) rowFavBtn.style.color = (index > -1) ? 'white' : 'gold';
+            }
+        });
+        try {
+            await db.from('user_settings').update({ favorited_links: userData.favorited_links }).eq('id', currentUser.id);
+        } catch(e) { console.error("Star Sync Error:", e); }
+    };
+
+    const summaryBtn = body.querySelector('#reader-summary-btn');
+    summaryBtn.onclick = async () => {
+        const index = userData.summary_links.indexOf(post.link);
+        if (index > -1) {
+            userData.summary_links.splice(index, 1);
+            summaryBtn.style.filter = 'grayscale(1)';
+        } else {
+            userData.summary_links.push(post.link);
+            summaryBtn.style.filter = 'sepia(1) saturate(5) hue-rotate(90deg)';
+        }
+        document.querySelectorAll('.post-row, .post-item').forEach(row => {
+            if (row.dataset.link === post.link) {
+                const rowSumBtn = row.querySelector('.sum-btn');
+                if (rowSumBtn) rowSumBtn.style.filter = (index > -1) ? 'grayscale(1)' : 'sepia(1) saturate(5) hue-rotate(90deg)';
+            }
+        });
+        try {
+            await db.from('user_settings').update({ summary_links: userData.summary_links }).eq('id', currentUser.id);
+        } catch(e) { console.error("Summary Sync Error:", e); }
+    };
+
+    const copyBtn = body.querySelector('#reader-copy-btn');
+    copyBtn.onclick = async () => {
+        const format = body.querySelector('#reader-export-format').value;
+        const content = generateReaderArticleContent(post, format, true);
+        try {
+            await navigator.clipboard.writeText(content);
+            const status = body.querySelector('#reader-copy-status');
+            status.textContent = `Als ${format.toUpperCase()} kopiert!`;
+            status.style.color = 'green';
+            setTimeout(() => status.textContent = '', 3000);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const saveBtn = body.querySelector('#reader-save-btn');
+    saveBtn.onclick = () => {
+        const format = body.querySelector('#reader-export-format').value;
+        const content = generateReaderArticleContent(post, format, false);
+        const mimeType = format === 'html' ? 'text/html' : (format === 'markdown' ? 'text/markdown' : 'text/plain');
+        const extension = format === 'html' ? 'html' : (format === 'markdown' ? 'md' : 'txt');
+        const fileName = (post.title.substring(0, 50).replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'article') + '.' + extension;
+        
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const aiSummaryBtn = body.querySelector('#reader-ai-summary-btn');
+    const aiReportContainer = body.querySelector('#reader-ai-report-container');
+    const aiReportContent = body.querySelector('#reader-ai-report-content');
+    
+    aiSummaryBtn.onclick = async () => {
+        const geminiApiKey = localStorage.getItem('gemini_api_key') || '';
+        if (!geminiApiKey || geminiApiKey.trim() === '') {
+            alert("Bitte hinterlege zuerst deinen Google Gemini API Key in den Einstellungen (Zahnrad-Symbol oben rechts).");
+            return;
+        }
+
+        aiSummaryBtn.innerText = 'Wird geladen...';
+        aiSummaryBtn.disabled = true;
+        aiReportContainer.classList.remove('hidden');
+        aiReportContent.innerHTML = '<p><em>Beitrag wird analysiert... bitte warten.</em></p>';
+
+        try {
+            let promptText = "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.\n\n";
+            promptText += `### Article: ${post.title}\n`;
+            promptText += `URL: ${post.link}\n\n`;
+            
+            const bodyText = (post.desc || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 8000);
+            promptText += `Content:\n${bodyText}\n\n`;
+
+            const modelsToTry = await getAvailableGeminiModels(geminiApiKey);
+            let response = null;
+            let lastErrorData = null;
+
+            for (const model of modelsToTry) {
+                response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: promptText
+                            }]
+                        }]
+                    })
+                });
+
+                if (response.ok) break;
+                else lastErrorData = await response.json();
+            }
+
+            if (!response || !response.ok) {
+                throw new Error(lastErrorData?.error?.message || 'API Request failed');
+            }
+
+            const data = await response.json();
+            const text = data.candidates[0].content.parts[0].text;
+            aiReportContent.innerHTML = marked.parse(text);
+
+            body.querySelector('#reader-close-ai-report-btn').onclick = () => {
+                aiReportContainer.classList.add('hidden');
+            };
+
+            body.querySelector('#reader-copy-ai-report-btn').onclick = async () => {
+                const aiFormat = body.querySelector('#reader-export-ai-format').value;
+                let exportText = text;
+                if (aiFormat === 'html') exportText = marked.parse(text);
+                await navigator.clipboard.writeText(exportText);
+                alert("Kopiert!");
+            };
+
+            body.querySelector('#reader-download-ai-report-btn').onclick = () => {
+                const aiFormat = body.querySelector('#reader-export-ai-format').value;
+                let exportText = text;
+                let extension = 'md';
+                let mimeType = 'text/markdown';
+                if (aiFormat === 'html') {
+                    exportText = marked.parse(text);
+                    extension = 'html';
+                    mimeType = 'text/html';
+                } else if (aiFormat === 'txt') {
+                    exportText = text.replace(/[*#_`-]/g, '');
+                    extension = 'txt';
+                    mimeType = 'text/plain';
+                }
+                const fileName = `summary-${post.title.substring(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${extension}`;
+                const blob = new Blob([exportText], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+        } catch (err) {
+            console.error(err);
+            aiReportContent.innerHTML = `<p style="color:red;"><strong>Fehler:</strong> ${err.message}</p>`;
+        } finally {
+            aiSummaryBtn.innerText = 'AI Summary';
+            aiSummaryBtn.disabled = false;
+        }
+    };
 
     const innerContent = body.querySelector('#reader-inner-content');
 
@@ -1659,6 +1889,74 @@ async function openReader(post) {
             innerContent.innerHTML = `<div style="font-size:16px; line-height:1.7; color:#eee;">${content}</div>`;
         }
     } catch (e) { innerContent.innerHTML = `<div style="color:red; margin-top:20px;">Fehler beim Laden des Inhalts: ${e.message}</div>`; }
+}
+
+function generateReaderArticleContent(post, format, isFragment = false) {
+    const title = post.title;
+    const url = post.link;
+    const contentHtml = post.desc || '';
+
+    if (format === 'txt') {
+        let text = `${title}\n`;
+        text += `URL: ${url}\n`;
+        text += `\n--------------------------------------\n\n`;
+        
+        let htmlWithBreaks = contentHtml
+            .replace(/<(p|div)[^>]*>/gi, '\n\n')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<li[^>]*>/gi, '\n- ')
+            .replace(/<h[1-6][^>]*>/gi, '\n\n\n');
+        let tempDiv = document.createElement('div');
+        tempDiv.innerHTML = htmlWithBreaks;
+        text += tempDiv.textContent.trim().replace(/\n{3,}/g, '\n\n');
+        return text;
+    } else if (format === 'markdown') {
+        let md = `# ${title}\n\n`;
+        md += `**URL:** [${url}](${url})  \n`;
+        md += `\n---\n\n`;
+        let bodyMd = contentHtml
+            .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n\n# $1\n\n')
+            .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n\n## $1\n\n')
+            .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n\n### $1\n\n')
+            .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n\n#### $1\n\n')
+            .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '\n\n$1\n\n')
+            .replace(/<div[^>]*>/gi, '\n\n')
+            .replace(/<br\s*\/?>/gi, '  \n')
+            .replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, '**$1**')
+            .replace(/<b[^>]*>([\s\S]*?)<\/b>/gi, '**$1**')
+            .replace(/<em[^>]*>([\s\S]*?)<\/em>/gi, '*$1*')
+            .replace(/<i[^>]*>([\s\S]*?)<\/i>/gi, '*$1*')
+            .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
+            .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1');
+            
+        let tempDiv = document.createElement('div');
+        tempDiv.innerHTML = bodyMd;
+        md += tempDiv.textContent.trim().replace(/\n{3,}/g, '\n\n');
+        return md;
+    } else if (format === 'html') {
+        const fragment = `<div class="puretidings-content" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: auto; overflow-wrap: break-word;">
+            <style>
+                .puretidings-content img, .puretidings-content figure { max-width: 100% !important; height: auto !important; margin: 15px 0; border-radius: 4px; }
+                .puretidings-content video, .puretidings-content iframe { max-width: 100% !important; border-radius: 4px; }
+                .puretidings-content .video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%; margin: 20px 0; background: #000; border-radius: 8px; }
+                .puretidings-content .video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+                .puretidings-content pre { background: #f4f4f4; padding: 15px; border-radius: 4px; overflow-x: auto; }
+                @media (prefers-color-scheme: dark) {
+                    .puretidings-content { color: #eee !important; background: #222 !important; }
+                    .puretidings-content a { color: #58a6ff !important; }
+                    .puretidings-content pre { background: #333 !important; }
+                }
+            </style>
+            <h1 style="font-size: 2em; margin-bottom: 10px;">${title}</h1>
+            <p><strong>Original URL:</strong> <a href="${url}" target="_blank">${url}</a></p>
+            <hr style="border:0; border-top:1px solid #ddd; margin: 20px 0;">
+            <div class="puretidings-body">
+                ${contentHtml}
+            </div>
+        </div>`;
+        if (isFragment) return fragment;
+        return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${fragment}</body></html>`;
+    }
 }
 
 function sanitizeReaderContent(html) {
