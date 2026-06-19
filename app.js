@@ -626,8 +626,6 @@ function findNodeById(tree, nodeId) {
     }
     return null;
 }
-    walk(tree, list);
-}
 
 function getAllFeeds() {
     const feeds = [];
