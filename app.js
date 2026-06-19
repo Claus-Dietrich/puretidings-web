@@ -96,6 +96,8 @@ async function init() {
     const settingsGeminiKey = document.getElementById('settings-gemini-key');
     const settingsAiPrompt = document.getElementById('settings-ai-prompt');
     const settingsYtPrompt = document.getElementById('settings-yt-prompt');
+    const settingsMarkAllRead = document.getElementById('settings-mark-all-read');
+    const settingsMarkAllUnread = document.getElementById('settings-mark-all-unread');
 
     if (settingsBtn && settingsOverlay) {
         settingsBtn.onclick = () => {
@@ -108,6 +110,22 @@ async function init() {
     if (settingsClose && settingsOverlay) {
         settingsClose.onclick = () => {
             settingsOverlay.style.display = 'none';
+        };
+    }
+    if (settingsMarkAllRead && settingsOverlay) {
+        settingsMarkAllRead.onclick = async () => {
+            if (confirm("Möchten Sie wirklich alle Artikel in allen Kanälen als gelesen markieren?")) {
+                await markAllAsRead();
+                settingsOverlay.style.display = 'none';
+            }
+        };
+    }
+    if (settingsMarkAllUnread && settingsOverlay) {
+        settingsMarkAllUnread.onclick = async () => {
+            if (confirm("Möchten Sie wirklich alle Artikel in allen Kanälen als ungelesen markieren?")) {
+                await markAllAsUnread();
+                settingsOverlay.style.display = 'none';
+            }
         };
     }
     if (settingsSave && settingsOverlay) {
@@ -1715,6 +1733,85 @@ async function markFeedAsRead(feedUrl) {
         } catch (e) { console.error("Sync Mark Feed As Read Error:", e); }
     }
     updateSidebarTreeForUnread();
+}
+
+async function markAllAsRead() {
+    let changed = false;
+    for (const url in globalPostsCache) {
+        const posts = globalPostsCache[url] || [];
+        posts.forEach(post => {
+            if (post.link && !userData.read_links.includes(post.link)) {
+                userData.read_links.push(post.link);
+                changed = true;
+            }
+        });
+    }
+
+    const rows = document.querySelectorAll('.post-row');
+    rows.forEach(row => {
+        const link = row.dataset.link;
+        if (link) {
+            row.style.opacity = '0.5';
+            const title = row.querySelector('.post-title');
+            if (title) title.style.fontWeight = 'normal';
+            const unreadBtn = row.querySelector('.unread-btn');
+            if (unreadBtn) unreadBtn.style.display = 'flex';
+        }
+    });
+
+    document.querySelectorAll('#feed-list-items .unread-count').forEach(countEl => {
+        countEl.style.display = 'none';
+        countEl.innerText = '0';
+    });
+
+    if (changed || rows.length > 0) {
+        try {
+            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+        } catch (e) { console.error("Sync Mark All Read Error:", e); }
+    }
+    updateSidebarTreeForUnread();
+    filterSidebarFeeds();
+}
+
+async function markAllAsUnread() {
+    userData.read_links = [];
+
+    const rows = document.querySelectorAll('.post-row');
+    rows.forEach(row => {
+        row.style.opacity = '1';
+        const title = row.querySelector('.post-title');
+        if (title) title.style.fontWeight = '600';
+        const unreadBtn = row.querySelector('.unread-btn');
+        if (unreadBtn) unreadBtn.style.display = 'none';
+    });
+
+    const feeds = [];
+    function walk(nodes) { nodes.forEach(n => { if (n.type === 'feed' && n.url) feeds.push(n); if (n.children) walk(n.children); }); }
+    walk(userData.feed_tree);
+    
+    feeds.forEach(feed => {
+        const id = safeId(feed.url);
+        const countEl = document.querySelector(`#sidebar-feed-${id} .unread-count`);
+        if (countEl) {
+            const posts = globalPostsCache[feed.url] || [];
+            if (posts.length > 0) {
+                countEl.innerText = posts.length;
+                countEl.style.setProperty('display', 'inline-block', 'important');
+                countEl.style.backgroundColor = '#4a90e2';
+            } else {
+                countEl.style.display = 'none';
+            }
+        }
+    });
+
+    try {
+        await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+    } catch (e) { console.error("Sync Mark All Unread Error:", e); }
+
+    updateSidebarTreeForUnread();
+    filterSidebarFeeds();
+    
+    calculateAllUnreadCounts();
 }
 
 async function markAsUnread(link, row) {
