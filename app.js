@@ -1616,7 +1616,7 @@ async function openReader(post) {
     body.innerHTML = `
         <!-- Reader Toolbar -->
         <div id="reader-toolbar" style="display:flex; align-items:center; gap:8px; margin-bottom:20px; border-bottom:1px solid #e8eaed; padding-bottom:15px; flex-wrap:wrap;">
-            <select id="reader-export-format" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:0 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none; height:28px;">
+            <select id="reader-export-format" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:0 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none; height:28px; width:auto !important; min-width:80px;">
                 <option value="txt">TXT</option>
                 <option value="markdown">Markdown</option>
                 <option value="html">HTML</option>
