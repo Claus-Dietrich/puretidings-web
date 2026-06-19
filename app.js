@@ -352,6 +352,7 @@ function renderSidebar(tree) {
     container.innerHTML = `
         <div style="padding:15px 10px;">
             <div id="sidebar-nav-all" onclick="showView('all')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#eee; font-size:13px; display:flex; align-items:center; gap:10px; background:#222; border-radius:6px; margin-bottom:5px;"><span>🏠</span> All Posts</div>
+            <div id="sidebar-nav-unread" onclick="showView('unread')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px; margin-bottom:5px;"><span>✉️</span> Unread Posts</div>
             <div id="sidebar-nav-favorites" onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px; margin-bottom:5px;"><span>⭐</span> Favorites</div>
             <div id="sidebar-nav-summary" onclick="showView('summary')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px;"><span>📋</span> Summary List</div>
         </div>
@@ -763,12 +764,17 @@ async function showView(view) {
     document.querySelectorAll('.sidebar-item-row').forEach(el => el.style.background = 'transparent');
     
     const allBtn = document.getElementById('sidebar-nav-all');
+    const unreadBtn = document.getElementById('sidebar-nav-unread');
     const favBtn = document.getElementById('sidebar-nav-favorites');
     const sumBtn = document.getElementById('sidebar-nav-summary');
     
     if (allBtn) {
         allBtn.style.background = (view === 'all') ? '#2c2c2c' : 'transparent';
         allBtn.style.color = (view === 'all') ? '#eee' : '#aaa';
+    }
+    if (unreadBtn) {
+        unreadBtn.style.background = (view === 'unread') ? '#2c2c2c' : 'transparent';
+        unreadBtn.style.color = (view === 'unread') ? '#eee' : '#aaa';
     }
     if (favBtn) {
         favBtn.style.background = (view === 'favorites') ? '#2c2c2c' : 'transparent';
@@ -780,7 +786,7 @@ async function showView(view) {
     }
     
     const container = document.getElementById('posts-container');
-    container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade ${view === 'all' ? 'alle' : (view === 'favorites' ? 'Favoriten-' : 'Zusammenfassungs-')} Artikel...</div></div>`;
+    container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade ${view === 'all' ? 'alle' : (view === 'unread' ? 'ungelesene' : (view === 'favorites' ? 'Favoriten-' : 'Zusammenfassungs-'))} Artikel...</div></div>`;
     
     const feeds = getAllFeeds();
     if (feeds.length === 0) {
@@ -810,6 +816,22 @@ async function showView(view) {
             
             filteredPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
             renderPostsList(filteredPosts, "All Posts");
+        } else if (view === 'unread') {
+            let unreadPosts = allPosts.filter(post => !userData.read_links || !userData.read_links.includes(post.link));
+            
+            // Apply date filtering
+            const { start, end } = getWebSummaryFilters();
+            unreadPosts = unreadPosts.filter(post => {
+                if (!post.pubDate) return true;
+                const postDate = new Date(post.pubDate);
+                if (isNaN(postDate.getTime())) return true;
+                if (start && postDate < start) return false;
+                if (end && postDate > end) return false;
+                return true;
+            });
+            
+            unreadPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            renderPostsList(unreadPosts, "Unread Posts");
         } else if (view === 'favorites') {
             let favPosts = allPosts.filter(post => userData.favorited_links.includes(post.link));
             
