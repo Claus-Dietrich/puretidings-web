@@ -1209,6 +1209,7 @@ function getActiveFeedUrlsByFilters() {
             // Apply view-specific constraints
             if (currentViewMode === 'favorites' && !userData.favorited_links.includes(post.link)) return false;
             if (currentViewMode === 'summary' && !userData.summary_links.includes(post.link)) return false;
+            if (currentViewMode === 'unread' && userData.read_links.includes(post.link)) return false;
 
             if (post.pubDate) {
                 const postDate = new Date(post.pubDate);
@@ -1233,7 +1234,7 @@ function getActiveFeedUrlsByFilters() {
 }
 
 function filterSidebarFeeds() {
-    const isFilteredView = (currentViewMode === 'all' || currentViewMode === 'favorites' || currentViewMode === 'summary' || currentViewMode === 'feed');
+    const isFilteredView = (currentViewMode === 'all' || currentViewMode === 'favorites' || currentViewMode === 'summary' || currentViewMode === 'feed' || currentViewMode === 'unread');
     const feedRows = document.querySelectorAll('.sidebar-item-row');
     const folderContainers = document.querySelectorAll('.folder-children');
 
@@ -1285,7 +1286,9 @@ function filterSidebarFeeds() {
 
             if (visibleChildren.length > 0) {
                 row.style.display = 'flex';
-                nextContainer.style.display = 'block';
+                const toggle = row.querySelector('.folder-toggle');
+                const isCollapsed = toggle && toggle.innerText === '▶';
+                nextContainer.style.display = isCollapsed ? 'none' : 'block';
             } else {
                 row.style.display = 'none';
                 nextContainer.style.display = 'none';
