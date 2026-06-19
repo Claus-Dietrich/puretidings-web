@@ -1615,17 +1615,17 @@ async function openReader(post) {
 
     body.innerHTML = `
         <!-- Reader Toolbar -->
-        <div id="reader-toolbar" style="display:flex; align-items:center; gap:10px; margin-bottom:20px; border-bottom:1px solid #333; padding-bottom:15px; flex-wrap:wrap;">
-            <select id="reader-export-format" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none;">
+        <div id="reader-toolbar" style="display:flex; align-items:center; gap:8px; margin-bottom:20px; border-bottom:1px solid #e8eaed; padding-bottom:15px; flex-wrap:wrap;">
+            <select id="reader-export-format" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:0 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none; height:28px;">
                 <option value="txt">TXT</option>
                 <option value="markdown">Markdown</option>
                 <option value="html">HTML</option>
             </select>
-            <button id="reader-copy-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Copy</button>
-            <button id="reader-save-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Save</button>
-            <button id="reader-star-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:${isFav ? 'gold' : 'white'} !important; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;" title="Add to favorites">${isFav ? '★' : '☆'}</button>
-            <button id="reader-summary-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;" title="Add to summary cart">📋</button>
-            <button id="reader-ai-summary-btn" class="secondary-btn" style="background:#ff9800; border:1px solid #e68a00; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">AI Summary</button>
+            <button id="reader-copy-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:0 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; height:28px; display:inline-flex; align-items:center; justify-content:center;">Copy</button>
+            <button id="reader-save-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:0 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; height:28px; display:inline-flex; align-items:center; justify-content:center;">Save</button>
+            <button id="reader-star-btn" style="background:transparent; border:1px solid #555; color:${isFav ? 'gold' : 'white'}; border-radius:4px; font-size:14px; cursor:pointer; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0;" title="Add to favorites">${isFav ? '★' : '☆'}</button>
+            <button id="reader-summary-btn" style="background:transparent; border:1px solid #555; border-radius:4px; font-size:14px; cursor:pointer; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; padding:0; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'};" title="Add to summary cart">📋</button>
+            <button id="reader-ai-summary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:0 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; height:28px; display:inline-flex; align-items:center; justify-content:center;">AI Summary</button>
             <span id="reader-copy-status" style="font-size:12px; margin-left:8px;"></span>
         </div>
 
