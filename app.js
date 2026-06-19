@@ -915,8 +915,11 @@ function calculateReadingTime(text) {
 // --- FEED LOADING ---
 
 async function loadFeedPosts(url, feedName = '') {
+    // Determine view mode context
+    if (currentViewMode !== 'favorites' && currentViewMode !== 'summary') {
+        currentViewMode = 'feed';
+    }
     currentFeedUrl = url;
-    currentViewMode = 'feed';
 
     const container = document.getElementById('posts-container');
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade Artikel...</div></div>';
@@ -935,6 +938,13 @@ async function loadFeedPosts(url, feedName = '') {
 
     try {
         let posts = await getFeedPosts(url, feedName);
+        
+        // Filter by favorites / summary if in those views
+        if (currentViewMode === 'favorites') {
+            posts = posts.filter(post => userData.favorited_links.includes(post.link));
+        } else if (currentViewMode === 'summary') {
+            posts = posts.filter(post => userData.summary_links.includes(post.link));
+        }
         
         // Filter by active date filters
         const { start, end } = getWebSummaryFilters();
@@ -1008,7 +1018,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     <button id="web-full-view-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
                     </button>
-                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; ${(currentViewMode === 'all' || currentViewMode === 'feed') ? 'display:none;' : ''}">
+                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; ${(currentViewMode === 'all' || currentViewMode === 'feed' || currentFeedUrl) ? 'display:none;' : ''}">
                         ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : 'Liste leeren 🗑'}
                     </button>
                 </div>
@@ -1030,7 +1040,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             } else {
                 customRange.classList.add('hidden');
             }
-            if (currentViewMode === 'feed') {
+            if (currentFeedUrl) {
                 loadFeedPosts(currentFeedUrl, headerTitle);
             } else {
                 showView(currentViewMode);
@@ -1049,7 +1059,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     filterTimeFromVal = timeFrom.value;
                     filterDateToVal = dateTo.value;
                     filterTimeToVal = timeTo.value;
-                    if (currentViewMode === 'feed') {
+                    if (currentFeedUrl) {
                         loadFeedPosts(currentFeedUrl, headerTitle);
                     } else {
                         showView(currentViewMode);
