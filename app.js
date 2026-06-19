@@ -421,6 +421,123 @@ function parseFeedXML(xmlString) {
     return doc;
 }
 
+// --- Drag and Drop in Sidebar ---
+let draggedNodeId = null;
+
+function handleSidebarDragStart(e) {
+    draggedNodeId = this.dataset.id;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', draggedNodeId);
+}
+
+function handleSidebarDragOver(e) {
+    if (e.preventDefault) e.preventDefault();
+    
+    const rect = this.getBoundingClientRect();
+    const height = rect.height;
+    const y = e.clientY - rect.top;
+    const isFolder = this.classList.contains('folder-header');
+    
+    this.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
+    
+    // If it's a folder, allow dropping INTO it (center zone)
+    if (isFolder && y > height * 0.25 && y < height * 0.75) {
+        this.classList.add('drag-over-center');
+    } else if (y < height / 2) {
+        this.classList.add('drag-over-top');
+    } else {
+        this.classList.add('drag-over-bottom');
+    }
+    
+    return false;
+}
+
+function handleSidebarDragLeave() {
+    this.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
+}
+
+function handleSidebarDragEnd() {
+    this.classList.remove('dragging');
+    const items = document.querySelectorAll('.sidebar-item-row');
+    items.forEach(item => item.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center'));
+}
+
+function isNodeDescendant(parentId, childId) {
+    if (parentId === childId) return true;
+    const parentNode = findNodeById(userData.feed_tree, parentId);
+    if (!parentNode || !parentNode.children) return false;
+    
+    function walk(nodes) {
+        for (const n of nodes) {
+            if (n.id === childId) return true;
+            if (n.children && walk(n.children)) return true;
+        }
+        return false;
+    }
+    return walk(parentNode.children);
+}
+
+async function handleSidebarDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+    
+    const isCenter = this.classList.contains('drag-over-center');
+    const isTop = this.classList.contains('drag-over-top');
+    this.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-center');
+
+    const targetNodeId = this.dataset.id;
+    if (draggedNodeId === targetNodeId) return;
+
+    // Safety: Prevent moving a folder inside itself or its children
+    if (isNodeDescendant(draggedNodeId, targetNodeId)) {
+        console.warn("Folder cannot be moved inside itself or one of its subfolders.");
+        return;
+    }
+
+    // Extract node from current tree
+    const draggedNode = findNodeById(userData.feed_tree, draggedNodeId);
+    if (!draggedNode) return;
+    
+    removeNodeFromTree(userData.feed_tree, draggedNodeId);
+
+    let success = false;
+
+    if (isCenter) {
+        // Drop inside a folder
+        const folder = findNodeById(userData.feed_tree, targetNodeId);
+        if (folder && folder.type === 'folder') {
+            if (!folder.children) folder.children = [];
+            folder.children.push(draggedNode);
+            success = true;
+        }
+    } else {
+        // Drop before or after target node
+        function findAndInsert(nodes, targetId, nodeToInsert, before) {
+            for (let i = 0; i < nodes.length; i++) {
+                if (nodes[i].id === targetId) {
+                    const index = before ? i : i + 1;
+                    nodes.splice(index, 0, nodeToInsert);
+                    return true;
+                }
+                if (nodes[i].type === 'folder' && nodes[i].children) {
+                    if (findAndInsert(nodes[i].children, targetId, nodeToInsert, before)) return true;
+                }
+            }
+            return false;
+        }
+        success = findAndInsert(userData.feed_tree, targetNodeId, draggedNode, isTop);
+    }
+
+    if (success) {
+        await saveFeedTreeToDatabase();
+    } else {
+        // Fallback: put draggedNode back at the root
+        userData.feed_tree.push(draggedNode);
+        await saveFeedTreeToDatabase();
+    }
+    return false;
+}
+
 function renderSidebar(tree) {
     const container = document.getElementById('feed-tree-container');
     if (!container) return;
@@ -432,7 +549,7 @@ function renderSidebar(tree) {
             <div id="sidebar-nav-favorites" onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px; margin-bottom:5px;"><span>⭐</span> Favorites</div>
             <div id="sidebar-nav-summary" onclick="showView('summary')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px;"><span>📋</span> Summary List</div>
         </div>
-        <h3 style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0; display:flex; justify-content:space-between; align-items:center;">
+        <h3 id="sidebar-feeds-header" style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0; display:flex; justify-content:space-between; align-items:center;">
             <span>My Feeds</span>
             <div style="display:flex; gap:10px; text-transform:none;">
                 <span id="add-feed-btn" title="Feed hinzufügen" style="cursor:pointer; color:#ff9800; font-weight:bold; font-size:12px;">+ Feed</span>
@@ -457,6 +574,34 @@ function renderSidebar(tree) {
             handleAddFolderPrompt();
         };
     }
+
+    // Drag-Over Header to move items back to root level
+    const header = document.getElementById('sidebar-feeds-header');
+    if (header) {
+        header.addEventListener('dragover', (e) => {
+            if (e.preventDefault) e.preventDefault();
+            header.classList.add('drag-over-center');
+            return false;
+        });
+        header.addEventListener('dragleave', () => {
+            header.classList.remove('drag-over-center');
+        });
+        header.addEventListener('drop', async (e) => {
+            if (e.stopPropagation) e.stopPropagation();
+            header.classList.remove('drag-over-center');
+            
+            if (!draggedNodeId) return false;
+            
+            const draggedNode = findNodeById(userData.feed_tree, draggedNodeId);
+            if (!draggedNode) return false;
+            
+            removeNodeFromTree(userData.feed_tree, draggedNodeId);
+            // Move item to root level
+            userData.feed_tree.push(draggedNode);
+            await saveFeedTreeToDatabase();
+            return false;
+        });
+    }
     
     const list = document.getElementById('feed-list-items');
     
@@ -471,13 +616,25 @@ function renderSidebar(tree) {
             li.style.alignItems = 'center';
             li.className = 'sidebar-item-row';
 
+            // Drag and Drop Setup
+            li.dataset.id = n.id;
+            li.dataset.type = n.type;
+            li.draggable = true;
+
+            li.addEventListener('dragstart', handleSidebarDragStart);
+            li.addEventListener('dragover', handleSidebarDragOver);
+            li.addEventListener('dragleave', handleSidebarDragLeave);
+            li.addEventListener('drop', handleSidebarDrop);
+            li.addEventListener('dragend', handleSidebarDragEnd);
+
             if (n.type === 'folder') {
+                li.classList.add('folder-header');
                 li.innerHTML = `
-                    <span class="folder-toggle" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> 
-                    <span style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#888;">${n.name.toUpperCase()}</span>
-                    <span class="edit-actions" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
-                        <span class="edit-btn" title="Umbenennen" style="opacity:0.6; cursor:pointer;">✏️</span>
-                        <span class="delete-btn" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
+                    <span class="folder-toggle" draggable="false" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> 
+                    <span draggable="false" style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#888;">${n.name.toUpperCase()}</span>
+                    <span class="edit-actions" draggable="false" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
+                        <span class="edit-btn" draggable="false" title="Umbenennen" style="opacity:0.6; cursor:pointer;">✏️</span>
+                        <span class="delete-btn" draggable="false" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
                     </span>
                 `;
                 li.onclick = (e) => {
@@ -516,12 +673,12 @@ function renderSidebar(tree) {
                 li.id = `sidebar-feed-${id}`;
                 const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${new URL(n.url).hostname}`;
                 li.innerHTML = `
-                    <img src="${favicon}" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> 
-                    <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span>
-                    <span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>
-                    <span class="edit-actions" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
-                        <span class="edit-btn" title="Bearbeiten" style="opacity:0.6; cursor:pointer;">✏️</span>
-                        <span class="delete-btn" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
+                    <img src="${favicon}" draggable="false" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> 
+                    <span draggable="false" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span>
+                    <span class="unread-count" draggable="false" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>
+                    <span class="edit-actions" draggable="false" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
+                        <span class="edit-btn" draggable="false" title="Bearbeiten" style="opacity:0.6; cursor:pointer;">✏️</span>
+                        <span class="delete-btn" draggable="false" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
                     </span>
                 `;
                 li.onclick = () => loadFeedPosts(n.url, n.name);
