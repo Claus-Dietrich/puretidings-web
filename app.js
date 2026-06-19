@@ -756,9 +756,77 @@ async function getFeedPosts(url, feedName = '') {
     }
 }
 
+function updateSidebarTreeForUnread() {
+    const isUnreadView = (currentViewMode === 'unread');
+    
+    // 1. Filter all feeds
+    const feedRows = document.querySelectorAll('#feed-list-items div[id^="sidebar-feed-"]');
+    feedRows.forEach(row => {
+        if (isUnreadView) {
+            const countEl = row.querySelector('.unread-count');
+            const count = countEl && countEl.style.display !== 'none' ? parseInt(countEl.innerText, 10) || 0 : 0;
+            if (count === 0) {
+                row.style.display = 'none';
+            } else {
+                row.style.display = 'flex';
+            }
+        } else {
+            row.style.display = 'flex';
+        }
+    });
+
+    // 2. Filter all folders bottom-up (deepest first)
+    const folderContainers = Array.from(document.querySelectorAll('.folder-children'));
+    folderContainers.sort((a, b) => {
+        const countAncestors = el => {
+            let count = 0;
+            let parent = el.parentElement;
+            while (parent) {
+                if (parent.classList.contains('folder-children')) count++;
+                parent = parent.parentElement;
+            }
+            return count;
+        };
+        return countAncestors(b) - countAncestors(a);
+    });
+
+    folderContainers.forEach(container => {
+        const folderRow = container.previousElementSibling;
+        if (!folderRow) return;
+
+        if (isUnreadView) {
+            let hasVisibleChildren = false;
+            for (let i = 0; i < container.children.length; i++) {
+                const child = container.children[i];
+                if (child.classList.contains('sidebar-item-row') && child.style.display !== 'none') {
+                    hasVisibleChildren = true;
+                    break;
+                }
+            }
+
+            if (hasVisibleChildren) {
+                folderRow.style.display = 'flex';
+                const toggle = folderRow.querySelector('.folder-toggle');
+                const isCollapsed = toggle && toggle.innerText === '▶';
+                container.style.display = isCollapsed ? 'none' : 'block';
+            } else {
+                folderRow.style.display = 'none';
+                container.style.display = 'none';
+            }
+        } else {
+            folderRow.style.display = 'flex';
+            const toggle = folderRow.querySelector('.folder-toggle');
+            const isCollapsed = toggle && toggle.innerText === '▶';
+            container.style.display = isCollapsed ? 'none' : 'block';
+        }
+    });
+}
+
 async function showView(view) {
     currentViewMode = view;
     currentFeedUrl = null;
+
+    updateSidebarTreeForUnread();
 
     // Reset background and color for top items and feed items
     document.querySelectorAll('.sidebar-item-row').forEach(el => el.style.background = 'transparent');
@@ -926,6 +994,7 @@ async function calculateAllUnreadCounts() {
         } catch (e) { console.error("Error counting unread for", feed.url, e); }
         await new Promise(r => setTimeout(r, 150));
     }
+    updateSidebarTreeForUnread();
 }
 
 // --- UTILS ---
@@ -1567,6 +1636,7 @@ async function markFeedAsUnread(feedUrl) {
             await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
         } catch (e) { console.error("Sync Mark Feed As Unread Error:", e); }
     }
+    updateSidebarTreeForUnread();
 }
 
 async function markFeedAsRead(feedUrl) {
@@ -1591,6 +1661,7 @@ async function markFeedAsRead(feedUrl) {
             await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
         } catch (e) { console.error("Sync Mark Feed As Read Error:", e); }
     }
+    updateSidebarTreeForUnread();
 }
 
 async function markAsUnread(link, row) {
@@ -1618,6 +1689,7 @@ async function markAsUnread(link, row) {
     try {
         await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
     } catch (e) { console.error("Sync Mark As Unread Error:", e); }
+    updateSidebarTreeForUnread();
 }
 
 async function markAsRead(link) {
@@ -1661,6 +1733,7 @@ async function markAsRead(link) {
         try {
             await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
         } catch (e) { console.error("Sync Read Status Error:", e); }
+        updateSidebarTreeForUnread();
     }
 }
 
