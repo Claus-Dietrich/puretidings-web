@@ -69,23 +69,41 @@ function applyRulesToPost(post, rules) {
     enabledRules.forEach(rule => {
         let postValue = '';
         if (rule.field === 'title') {
-            postValue = String(post.title || '').toLowerCase();
+            postValue = String(post.title || '');
         } else if (rule.field === 'author') {
-            postValue = String(post.author || '').toLowerCase();
+            postValue = String(post.author || '');
         } else {
-            postValue = String(post.desc || '').toLowerCase();
+            postValue = String(post.desc || post.description || '');
         }
 
-        const ruleKeywords = String(rule.value || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
-        if (ruleKeywords.length === 0) return;
+        const ruleValue = (rule.value || '').trim();
+        if (!ruleValue) return;
 
         let match = false;
         let matchedKeyword = '';
 
-        switch (rule.condition) {
-          case 'contains': match = !!(matchedKeyword = ruleKeywords.find(k => postValue.includes(k))); break;
-          case 'not-contains': match = !ruleKeywords.some(k => postValue.includes(k)); break;
-          case 'equals': match = !!(matchedKeyword = ruleKeywords.find(k => postValue === k)); break;
+        if (rule.condition === 'equals') {
+            match = postValue.toLowerCase() === ruleValue.toLowerCase();
+            if (match) matchedKeyword = ruleValue;
+        } else {
+            const searchConditionGroups = parseSearchQuery(ruleValue);
+            if (searchConditionGroups.length > 0) {
+                const matchingGroup = searchConditionGroups.find(group => 
+                    group.every(cond => cond.mustNot ? !cond.regex.test(postValue) : cond.regex.test(postValue))
+                );
+                
+                const matchesSearch = !!matchingGroup;
+                
+                if (rule.condition === 'contains') {
+                    match = matchesSearch;
+                    if (match && matchingGroup) {
+                        const positiveCond = matchingGroup.find(c => !c.mustNot);
+                        matchedKeyword = positiveCond ? positiveCond.regex.source.replace(/\\\*/g, '*').replace(/\\/g, '') : ruleValue;
+                    }
+                } else if (rule.condition === 'not-contains') {
+                    match = !matchesSearch;
+                }
+            }
         }
 
         if (match) {
@@ -1854,11 +1872,79 @@ async function loadFeedPosts(url, feedName = '') {
     }
 }
 
+function createPostRowElement(post, isToolbarView) {
+    const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
+    const row = document.createElement('div'); 
+    const isKeywordMatch = post.matchedRules && post.matchedRules.length > 0;
+    row.className = 'post-row' + (isKeywordMatch ? ' keyword-match' : '');
+    row.dataset.link = link;
+    row.postData = post; // Attach post data for search/copy/AI summary
+    
+    const isRead = userData.read_links.includes(link);
+    const isFav = userData.favorited_links.includes(link);
+    const isSum = userData.summary_links && userData.summary_links.includes(link);
+    
+    if (isRead) row.style.opacity = '0.5';
+    
+    row.innerHTML = `
+        <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
+            <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+        </a>
+        <div class="post-info">
+            <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                ${title}
+            </a>
+            
+            <!-- Legacy 300 char snippet for summary cart in list mode -->
+            <div class="summary-item-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'list') ? 'block' : 'none'}; font-size: 13px; color: #aaa; margin: 8px 0; line-height: 1.4;">
+                ${desc ? desc.replace(/<[^>]+>/g, ' ').substring(0, 300) + '...' : ''}
+            </div>
+
+            <!-- Inline full report view -->
+            <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
+                <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
+                ${desc || ''}
+            </div>
+
+            <div class="post-meta">
+                <span>${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</span>
+                <span style="margin-left:auto; color:#555;">(${durationStr})</span>
+            </div>
+        </div>
+        <div class="post-actions" style="display:flex; gap:5px;">
+            <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
+            <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
+            <button class="action-btn reader-btn" title="Reader">👓</button>
+            <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
+            <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
+        </div>
+    `;
+    
+    row.querySelector('.fav-btn').onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        toggleFavorite(link, row.querySelector('.fav-btn'));
+    };
+    row.querySelector('.sum-btn').onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        toggleSummary(link, row.querySelector('.sum-btn'));
+    };
+    row.querySelector('.reader-btn').onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        openReader({title, link, desc, thumbnail});
+    };
+    row.querySelector('.unread-btn').onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        markAsUnread(link, row);
+    };
+
+    return row;
+}
+
 function renderPostsList(posts, headerTitle, feedUrl = null) {
     const container = document.getElementById('posts-container');
     if (!container) return;
 
-    const isToolbarView = (currentViewMode === 'summary' || currentViewMode === 'favorites' || currentViewMode === 'all' || currentViewMode === 'feed' || currentViewMode === 'unread');
+    const isToolbarView = (currentViewMode === 'summary' || currentViewMode === 'favorites' || currentViewMode === 'all' || currentViewMode === 'feed' || currentViewMode === 'unread' || currentViewMode === 'keywords');
 
     if (isToolbarView) {
         let headerHtml = `
@@ -1911,9 +1997,11 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     <button id="web-full-view-summary" class="secondary-btn">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
                     </button>
-                    <button id="web-clear-list" class="delete-btn" style="${((currentViewMode === 'favorites' || currentViewMode === 'summary' || currentViewMode === 'keywords') && !currentFeedUrl) ? '' : 'display:none;'}">
-                        ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : (currentViewMode === 'keywords' ? 'Matches leeren 🗑' : 'Liste leeren 🗑')}
-                    </button>
+                    ${((currentViewMode === 'favorites' || currentViewMode === 'summary' || currentViewMode === 'keywords') && !currentFeedUrl) ? `
+                        <button id="web-clear-list" class="delete-btn">
+                            ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : (currentViewMode === 'keywords' ? 'Matches leeren 🗑' : 'Liste leeren 🗑')}
+                        </button>
+                    ` : ''}
                 </div>
                 <span id="web-copy-status" class="status-message-inline"></span>
             </div>
@@ -1970,7 +2058,10 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         
         document.getElementById('web-copy-summary').onclick = copySummaryLinks;
         document.getElementById('web-download-summary').onclick = downloadSummaryLinks;
-        document.getElementById('web-clear-list').onclick = clearCurrentList;
+        const clearListBtn = document.getElementById('web-clear-list');
+        if (clearListBtn) {
+            clearListBtn.onclick = clearCurrentList;
+        }
         document.getElementById('web-ai-report').onclick = generateAiSummary;
         
         const fullViewBtn = document.getElementById('web-full-view-summary');
@@ -2021,73 +2112,64 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         container.innerHTML = headerHtml;
     }
 
-    posts.forEach(post => {
-        const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
-        const row = document.createElement('div'); 
-        const isKeywordMatch = post.matchedRules && post.matchedRules.length > 0;
-        row.className = 'post-row' + (isKeywordMatch ? ' keyword-match' : '');
-        row.dataset.link = link;
-        row.postData = post; // Attach post data for search/copy/AI summary
-        
-        const isRead = userData.read_links.includes(link);
-        const isFav = userData.favorited_links.includes(link);
-        const isSum = userData.summary_links && userData.summary_links.includes(link);
-        
-        if (isRead) row.style.opacity = '0.5';
-        
-        row.innerHTML = `
-            <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
-            </a>
-            <div class="post-info">
-                <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                    ${title}
-                </a>
-                
-                <!-- Legacy 300 char snippet for summary cart in list mode -->
-                <div class="summary-item-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'list') ? 'block' : 'none'}; font-size: 13px; color: #aaa; margin: 8px 0; line-height: 1.4;">
-                    ${desc ? desc.replace(/<[^>]+>/g, ' ').substring(0, 300) + '...' : ''}
-                </div>
+    if (currentViewMode === 'keywords') {
+        const rules = getWebRules();
+        const postsByRule = {};
+        posts.forEach(post => {
+            if (post.matchedRules) {
+                post.matchedRules.forEach(match => {
+                    if (!postsByRule[match.id]) postsByRule[match.id] = [];
+                    if (!postsByRule[match.id].some(p => p.link === post.link)) {
+                        postsByRule[match.id].push(post);
+                    }
+                });
+            }
+        });
 
-                <!-- Inline full report view -->
-                <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
-                    <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
-                    ${desc || ''}
-                </div>
-
-                <div class="post-meta">
-                    <span>${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</span>
-                    <span style="margin-left:auto; color:#555;">(${durationStr})</span>
-                </div>
-            </div>
-            <div class="post-actions" style="display:flex; gap:5px;">
-                <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
-                <button class="action-btn reader-btn" title="Reader">👓</button>
-                <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
-                <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
-            </div>
-        `;
+        const processedRuleIds = new Set();
         
-        row.querySelector('.fav-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            toggleFavorite(link, row.querySelector('.fav-btn'));
+        const renderRuleSection = (ruleId, label) => {
+            const rulePosts = postsByRule[ruleId];
+            if (!rulePosts || rulePosts.length === 0) return;
+            
+            rulePosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            
+            const section = document.createElement('div');
+            section.className = 'feed-section';
+            
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'feed-title';
+            titleDiv.innerHTML = label;
+            section.appendChild(titleDiv);
+            
+            rulePosts.forEach(post => {
+                const row = createPostRowElement(post, isToolbarView);
+                section.appendChild(row);
+            });
+            
+            container.appendChild(section);
+            processedRuleIds.add(ruleId);
         };
-        row.querySelector('.sum-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            toggleSummary(link, row.querySelector('.sum-btn'));
-        };
-        row.querySelector('.reader-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            openReader({title, link, desc, thumbnail});
-        };
-        row.querySelector('.unread-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            markAsUnread(link, row);
-        };
+        
+        // Zuerst nach den vorgegebenen Regeln sortiert
+        rules.forEach(rule => {
+            const label = `Regel: WENN <strong>${rule.field}</strong> ${rule.condition.replace('-', ' ')} <code>${rule.value}</code>`;
+            renderRuleSection(rule.id, label);
+        });
+        
+        // Dann eventuell gelöschte Regeln
+        for (const ruleId in postsByRule) {
+            if (!processedRuleIds.has(ruleId)) {
+                renderRuleSection(ruleId, `Matches für eine gelöschte Regel`);
+            }
+        }
+    } else {
+        posts.forEach(post => {
+            const row = createPostRowElement(post, isToolbarView);
+            container.appendChild(row);
+        });
+    }
 
-        container.appendChild(row);
-    });
     filterSidebarFeeds();
 }
 
