@@ -795,8 +795,43 @@ function showWebCopyStatus(message, type) {
     setTimeout(() => { copyStatus.textContent = ""; }, 3000);
 }
 
+function getActiveFeedUrlsByFilters() {
+    const activeFeedUrls = new Set();
+    const { start, end } = getWebSummaryFilters();
+    const searchInput = document.getElementById('search-input');
+    const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    for (const url in globalPostsCache) {
+        const posts = globalPostsCache[url] || [];
+        const hasMatchingPost = posts.some(post => {
+            // Apply view-specific constraints
+            if (currentViewMode === 'favorites' && !userData.favorited_links.includes(post.link)) return false;
+            if (currentViewMode === 'summary' && !userData.summary_links.includes(post.link)) return false;
+
+            if (post.pubDate) {
+                const postDate = new Date(post.pubDate);
+                if (!isNaN(postDate.getTime())) {
+                    if (start && postDate < start) return false;
+                    if (end && postDate > end) return false;
+                }
+            }
+            if (q) {
+                const title = (post.title || '').toLowerCase();
+                const desc = (post.desc || '').toLowerCase();
+                if (!title.includes(q) && !desc.includes(q)) return false;
+            }
+            return true;
+        });
+
+        if (hasMatchingPost) {
+            activeFeedUrls.add(url);
+        }
+    }
+    return activeFeedUrls;
+}
+
 function filterSidebarFeeds() {
-    const isFilteredView = (currentViewMode === 'all' || currentViewMode === 'favorites' || currentViewMode === 'summary');
+    const isFilteredView = (currentViewMode === 'all' || currentViewMode === 'favorites' || currentViewMode === 'summary' || currentViewMode === 'feed');
     const feedRows = document.querySelectorAll('.sidebar-item-row');
     const folderContainers = document.querySelectorAll('.folder-children');
 
@@ -812,18 +847,8 @@ function filterSidebarFeeds() {
         return;
     }
 
-    // Finde alle aktiven Feed-URLs aus dem posts-container
-    const postsContainer = document.getElementById('posts-container');
-    const activeFeedUrls = new Set();
-    
-    if (postsContainer) {
-        const visibleRows = postsContainer.querySelectorAll('.post-row');
-        visibleRows.forEach(row => {
-            if (row.style.display !== 'none' && row.postData && row.postData.feedUrl) {
-                activeFeedUrls.add(row.postData.feedUrl);
-            }
-        });
-    }
+    // Finde alle aktiven Feed-URLs basierend auf den aktuellen Filtern und Modus
+    const activeFeedUrls = getActiveFeedUrlsByFilters();
 
     // Filter die Feeds
     feedRows.forEach(row => {
@@ -909,8 +934,26 @@ async function loadFeedPosts(url, feedName = '') {
     if (sumBtn) { sumBtn.style.background = 'transparent'; sumBtn.style.color = '#aaa'; }
 
     try {
-        const posts = await getFeedPosts(url, feedName);
+        let posts = await getFeedPosts(url, feedName);
+        
+        // Filter by active date filters
+        const { start, end } = getWebSummaryFilters();
+        posts = posts.filter(post => {
+            if (!post.pubDate) return true;
+            const postDate = new Date(post.pubDate);
+            if (isNaN(postDate.getTime())) return true;
+            if (start && postDate < start) return false;
+            if (end && postDate > end) return false;
+            return true;
+        });
+
         renderPostsList(posts, feedName, url);
+
+        // Apply active search query in UI (if any)
+        const searchInput = document.getElementById('search-input');
+        if (searchInput && searchInput.value.trim() !== '') {
+            handleSearch(searchInput.value);
+        }
     } catch (e) { 
         container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; 
     }
@@ -920,7 +963,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
     const container = document.getElementById('posts-container');
     if (!container) return;
 
-    const isToolbarView = (currentViewMode === 'summary' || currentViewMode === 'favorites' || currentViewMode === 'all');
+    const isToolbarView = (currentViewMode === 'summary' || currentViewMode === 'favorites' || currentViewMode === 'all' || currentViewMode === 'feed');
 
     if (isToolbarView) {
         let toolbarHtml = `
@@ -965,7 +1008,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     <button id="web-full-view-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
                     </button>
-                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; ${currentViewMode === 'all' ? 'display:none;' : ''}">
+                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; ${(currentViewMode === 'all' || currentViewMode === 'feed') ? 'display:none;' : ''}">
                         ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : 'Liste leeren 🗑'}
                     </button>
                 </div>
@@ -987,7 +1030,11 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             } else {
                 customRange.classList.add('hidden');
             }
-            showView(currentViewMode);
+            if (currentViewMode === 'feed') {
+                loadFeedPosts(currentFeedUrl, headerTitle);
+            } else {
+                showView(currentViewMode);
+            }
         };
         
         const dateFrom = document.getElementById('web-filter-date-from');
@@ -1002,7 +1049,11 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     filterTimeFromVal = timeFrom.value;
                     filterDateToVal = dateTo.value;
                     filterTimeToVal = timeTo.value;
-                    showView(currentViewMode);
+                    if (currentViewMode === 'feed') {
+                        loadFeedPosts(currentFeedUrl, headerTitle);
+                    } else {
+                        showView(currentViewMode);
+                    }
                 };
             }
         });
@@ -1046,7 +1097,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         if (!posts || posts.length === 0) {
             const noPostsDiv = document.createElement('div');
             noPostsDiv.style.cssText = "padding:40px; text-align:center; color:#888;";
-            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : (currentViewMode === 'all' ? "Keine Artikel vorhanden." : "Keine Artikel in der Zusammenfassungsliste.");
+            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : (currentViewMode === 'all' ? "Keine Artikel vorhanden." : (currentViewMode === 'feed' ? "Keine Artikel in diesem Kanal gefunden." : "Keine Artikel in der Zusammenfassungsliste."));
             container.appendChild(noPostsDiv);
             return;
         }
