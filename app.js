@@ -161,12 +161,57 @@ async function init() {
     }
 }
 
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
+}
+
+function parseSearchQuery(query) {
+    const searchInput = (query || '').trim();
+    if (!searchInput) return [];
+
+    const searchTerms = searchInput.split(',').map(t => t.trim()).filter(t => t.length > 0);
+
+    const searchConditionGroups = searchTerms.map(term => {
+        const conditions = [];
+        let currentMustNot = false;
+        const components = term.split(/(?:^|\s)(\+|\-)/);
+        
+        components.forEach(comp => {
+            const trimmed = comp.trim();
+            if (trimmed === '+') {
+                currentMustNot = false;
+            } else if (trimmed === '-') {
+                currentMustNot = true;
+            } else if (trimmed !== '') {
+                const escapedTerm = escapeRegExp(trimmed).replace(/\\\*/g, '.*');
+                conditions.push({
+                    regex: new RegExp(escapedTerm, 'i'),
+                    mustNot: currentMustNot
+                });
+            }
+        });
+        return conditions;
+    }).filter(group => group.length > 0);
+
+    return searchConditionGroups;
+}
+
 function handleSearch(query) {
-    const q = query.toLowerCase().trim();
+    const searchConditionGroups = parseSearchQuery(query);
     const rows = document.querySelectorAll('.post-row, .post-item');
     rows.forEach(row => {
-        const text = row.innerText.toLowerCase();
-        row.style.display = text.includes(q) ? 'flex' : 'none';
+        let textToSearch = '';
+        if (row.postData) {
+            const post = row.postData;
+            textToSearch = `${post.title || ''} ${post.feedName || ''} ${post.desc || post.description || ''} ${post.link || ''}`;
+        } else {
+            textToSearch = row.innerText + ' ' + (row.dataset.link || '');
+        }
+
+        const matches = searchConditionGroups.length === 0 || searchConditionGroups.some(group => 
+            group.every(cond => cond.mustNot ? !cond.regex.test(textToSearch) : cond.regex.test(textToSearch))
+        );
+        row.style.display = matches ? 'flex' : 'none';
     });
     filterSidebarFeeds();
 }
@@ -1201,7 +1246,8 @@ function getActiveFeedUrlsByFilters() {
     const activeFeedUrls = new Set();
     const { start, end } = getWebSummaryFilters();
     const searchInput = document.getElementById('search-input');
-    const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    const searchQuery = searchInput ? searchInput.value : '';
+    const searchConditionGroups = parseSearchQuery(searchQuery);
 
     for (const url in globalPostsCache) {
         const posts = globalPostsCache[url] || [];
@@ -1218,10 +1264,12 @@ function getActiveFeedUrlsByFilters() {
                     if (end && postDate > end) return false;
                 }
             }
-            if (q) {
-                const title = (post.title || '').toLowerCase();
-                const desc = (post.desc || '').toLowerCase();
-                if (!title.includes(q) && !desc.includes(q)) return false;
+            if (searchConditionGroups.length > 0) {
+                const textToSearch = `${post.title || ''} ${post.feedName || ''} ${post.desc || post.description || ''} ${post.link || ''}`;
+                const matches = searchConditionGroups.some(group => 
+                    group.every(cond => cond.mustNot ? !cond.regex.test(textToSearch) : cond.regex.test(textToSearch))
+                );
+                if (!matches) return false;
             }
             return true;
         });
