@@ -5,6 +5,9 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 let db;
 let currentUser = null;
 let currentFeedUrl = null;
+let currentViewMode = 'feed'; // 'feed', 'all', 'favorites'
+const globalPostsCache = {}; // Cache for fetched feed posts
+
 let userData = {
     feed_tree: [],
     favorited_links: [],
@@ -155,6 +158,7 @@ async function loadApp(user) {
         
         renderSidebar(userData.feed_tree);
         checkProStatus(data || {});
+        showView('all');
         calculateAllUnreadCounts();
 
     } catch (e) { showErrorOnScreen("Fehler beim Laden der Profildaten: " + e.message); }
@@ -221,14 +225,42 @@ function getFeedId(url) {
 
 function safeId(str) { return getFeedId(str); }
 
+function parseFeedXML(xmlString) {
+    if (!xmlString || xmlString.trim().length === 0) return null;
+    const parser = new DOMParser();
+    let doc = parser.parseFromString(xmlString, "application/xml");
+    
+    let parseError = doc.getElementsByTagName("parsererror");
+    if (parseError.length > 0) {
+        // Strategy 1: Fix attributes without values (e.g. <rss xmlns:itunes>)
+        const fixedXml = xmlString.replace(/<([a-zA-Z0-9:]+)([^>]+)>/g, (match, tagName, attrs) => {
+            const fixedAttrs = attrs.replace(/(\s+)([a-zA-Z0-9:\._\-]+)(?!\s*=)(?=\s|>|$)/g, '$1$2=""');
+            return `<${tagName}${fixedAttrs}>`;
+        });
+        
+        if (fixedXml !== xmlString) {
+            doc = parser.parseFromString(fixedXml, "application/xml");
+            parseError = doc.getElementsByTagName("parsererror");
+        }
+        
+        // Strategy 2: Fallback to text/html
+        if (parseError.length > 0) {
+            console.warn("XML parsing failed after fix, trying text/html fallback.");
+            doc = parser.parseFromString(xmlString, "text/html");
+        }
+    }
+    return doc;
+}
+
 function renderSidebar(tree) {
     const container = document.getElementById('feed-tree-container');
     if (!container) return;
     
     container.innerHTML = `
         <div style="padding:15px 10px;">
-            <div onclick="showView('all')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#eee; font-size:13px; display:flex; align-items:center; gap:10px; background:#222; border-radius:6px; margin-bottom:5px;"><span>🏠</span> All Posts</div>
-            <div onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px;"><span>⭐</span> Favorites</div>
+            <div id="sidebar-nav-all" onclick="showView('all')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#eee; font-size:13px; display:flex; align-items:center; gap:10px; background:#222; border-radius:6px; margin-bottom:5px;"><span>🏠</span> All Posts</div>
+            <div id="sidebar-nav-favorites" onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px; margin-bottom:5px;"><span>⭐</span> Favorites</div>
+            <div id="sidebar-nav-summary" onclick="showView('summary')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px;"><span>📋</span> Summary List</div>
         </div>
         <h3 style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0;">My Feeds</h3>
         <div id="feed-list-items" style="padding-bottom: 20px;"></div>
@@ -276,13 +308,223 @@ function renderSidebar(tree) {
     walk(tree, list);
 }
 
-function showView(view) {
-    if (view === 'all') {
-        // Todo: Implement All Posts view
-        alert('All Posts View wird noch implementiert');
-    } else if (view === 'favorites') {
-        // Todo: Implement Favorites view
-        alert('Favorites View wird noch implementiert');
+function getAllFeeds() {
+    const feeds = [];
+    function walk(nodes) {
+        nodes.forEach(n => {
+            if (n.type === 'feed' && n.url) feeds.push(n);
+            if (n.children) walk(n.children);
+        });
+    }
+    walk(userData.feed_tree);
+    return feeds;
+}
+
+async function getFeedPosts(url, feedName = '') {
+    try {
+        const { data: { session } } = await db.auth.getSession();
+        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`
+            }, 
+            body: JSON.stringify({ url }) 
+        });
+        const xmlStr = await res.text();
+        const xml = parseFeedXML(xmlStr);
+        if (!xml) return [];
+
+        const items = xml.querySelectorAll('item, entry');
+        const posts = [];
+        
+        items.forEach(item => {
+            const title = item.querySelector('title')?.textContent || 'Kein Titel';
+            let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
+            if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
+                link = item.querySelector('link[rel="alternate"]').getAttribute('href');
+            }
+            const descText = item.querySelector('description, summary, media\\:description')?.textContent || '';
+            let encodedText = "";
+            const ceNodes = item.getElementsByTagName('content:encoded');
+            if (ceNodes.length > 0) {
+              encodedText = ceNodes[0].textContent;
+            } else {
+              const encNodes = item.getElementsByTagName('encoded');
+              if (encNodes.length > 0) encodedText = encNodes[0].textContent;
+              else {
+                const contentNodes = item.getElementsByTagName('content');
+                if (contentNodes.length > 0 && !contentNodes[0].getAttribute('url')) encodedText = contentNodes[0].textContent;
+              }
+            }
+            const desc = descText;
+            const encoded = encodedText;
+            const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
+            
+            let thumbnail = '';
+            const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
+            let durationStr = '';
+            
+            if (ytId) {
+                thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
+                const cachedDuration = userData.duration_cache[ytId];
+                durationStr = cachedDuration ? cachedDuration : 'Video';
+            } else {
+                let mediaThumbnail = item.querySelector('thumbnail');
+                if (!mediaThumbnail) {
+                  const mtNodes = item.getElementsByTagName('media:thumbnail');
+                  if (mtNodes.length > 0) mediaThumbnail = mtNodes[0];
+                }
+                if (mediaThumbnail && mediaThumbnail.getAttribute('url')) {
+                  thumbnail = mediaThumbnail.getAttribute('url');
+                }
+
+                if (!thumbnail) {
+                    const mediaContentNodes = item.getElementsByTagName('media:content');
+                    for (const node of mediaContentNodes) {
+                        const medium = node.getAttribute('medium');
+                        const type = node.getAttribute('type');
+                        if (medium === 'image' || (type && type.startsWith('image'))) {
+                            thumbnail = node.getAttribute('url');
+                            if (thumbnail) break;
+                        }
+                    }
+                }
+
+                if (!thumbnail) {
+                    const enclosureNodes = item.getElementsByTagName('enclosure');
+                    for (const node of enclosureNodes) {
+                        const type = node.getAttribute('type');
+                        if (type && type.startsWith('image')) {
+                            thumbnail = node.getAttribute('url');
+                            if (thumbnail) break;
+                        }
+                    }
+                }
+                
+                if (!thumbnail) {
+                    const fullText = desc + encoded;
+                    const imgMatches = fullText.matchAll(/<img[^>]+src=["']([^"'>]+)["']/gi);
+                    for (const match of imgMatches) {
+                        const imgUrl = match[1];
+                        if (!imgUrl.includes('1x1') && !imgUrl.includes('tracking') && !imgUrl.endsWith('.gif') && imgUrl.startsWith('http')) {
+                            thumbnail = imgUrl;
+                            break;
+                        }
+                    }
+                }
+                durationStr = `${calculateReadingTime(desc+encoded)} min read`;
+            }
+
+            posts.push({
+                title,
+                link,
+                desc: desc + encoded,
+                thumbnail,
+                pubDate,
+                durationStr,
+                feedName,
+                feedUrl: url
+            });
+        });
+        
+        globalPostsCache[url] = posts;
+        return posts;
+    } catch (e) {
+        console.error("Error fetching feed:", url, e);
+        return [];
+    }
+}
+
+async function showView(view) {
+    currentViewMode = view;
+    currentFeedUrl = null;
+
+    // Reset background and color for top items and feed items
+    document.querySelectorAll('.sidebar-item-row').forEach(el => el.style.background = 'transparent');
+    
+    const allBtn = document.getElementById('sidebar-nav-all');
+    const favBtn = document.getElementById('sidebar-nav-favorites');
+    const sumBtn = document.getElementById('sidebar-nav-summary');
+    
+    if (allBtn) {
+        allBtn.style.background = (view === 'all') ? '#2c2c2c' : 'transparent';
+        allBtn.style.color = (view === 'all') ? '#eee' : '#aaa';
+    }
+    if (favBtn) {
+        favBtn.style.background = (view === 'favorites') ? '#2c2c2c' : 'transparent';
+        favBtn.style.color = (view === 'favorites') ? '#eee' : '#aaa';
+    }
+    if (sumBtn) {
+        sumBtn.style.background = (view === 'summary') ? '#2c2c2c' : 'transparent';
+        sumBtn.style.color = (view === 'summary') ? '#eee' : '#aaa';
+    }
+    
+    const container = document.getElementById('posts-container');
+    container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade ${view === 'all' ? 'alle' : (view === 'favorites' ? 'Favoriten-' : 'Zusammenfassungs-')} Artikel...</div></div>`;
+    
+    const feeds = getAllFeeds();
+    if (feeds.length === 0) {
+        container.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">Keine Feeds abonniert.</div>';
+        return;
+    }
+
+    try {
+        const promises = feeds.map(feed => getFeedPosts(feed.url, feed.name));
+        const results = await Promise.all(promises);
+        
+        let allPosts = results.flat();
+        
+        if (view === 'all') {
+            allPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            renderPostsList(allPosts, "All Posts");
+        } else if (view === 'favorites') {
+            const favPosts = allPosts.filter(post => userData.favorited_links.includes(post.link));
+            favPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            
+            // Add archived favorites that are no longer in XML feeds
+            const foundFavLinks = favPosts.map(p => p.link);
+            const missingFavLinks = userData.favorited_links.filter(link => !foundFavLinks.includes(link));
+            
+            missingFavLinks.forEach(link => {
+                favPosts.push({
+                    title: link,
+                    link: link,
+                    desc: "Older favorite. Link is saved, but full text is not in current feed feeds.",
+                    thumbnail: "",
+                    pubDate: "",
+                    durationStr: "Unknown",
+                    feedName: "Archived Favorite",
+                    feedUrl: null
+                });
+            });
+
+            renderPostsList(favPosts, "Favorites");
+        } else if (view === 'summary') {
+            const sumPosts = allPosts.filter(post => userData.summary_links.includes(post.link));
+            sumPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            
+            // Add archived summary items that are no longer in XML feeds
+            const foundSumLinks = sumPosts.map(p => p.link);
+            const missingSumLinks = userData.summary_links.filter(link => !foundSumLinks.includes(link));
+            
+            missingSumLinks.forEach(link => {
+                sumPosts.push({
+                    title: link,
+                    link: link,
+                    desc: "Older summary item. Link is saved, but full text is not in current feed feeds.",
+                    thumbnail: "",
+                    pubDate: "",
+                    durationStr: "Unknown",
+                    feedName: "Archived Summary Item",
+                    feedUrl: null
+                });
+            });
+
+            renderPostsList(sumPosts, "Summary List");
+        }
+    } catch (e) {
+        container.innerHTML = `<div style="padding:20px; color:red;">Fehler beim Laden: ${e.message}</div>`;
     }
 }
 
@@ -307,18 +549,10 @@ async function calculateAllUnreadCounts() {
             });
             if (!res.ok) continue;
             const xmlStr = await res.text();
-            let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
+            const xml = parseFeedXML(xmlStr);
+            if (!xml) continue;
 
-            // Check for parsing errors and apply fallback strategies
-            let parseError = xml.getElementsByTagName("parsererror");
-            let items = [];
-            if (parseError.length > 0) {
-                console.warn("XML parse error in count, trying text/html fallback for:", feed.url);
-                xml = new DOMParser().parseFromString(xmlStr, "text/html");
-                items = xml.querySelectorAll('item, entry, a[href]'); // Fallback für HTML
-            } else {
-                items = xml.querySelectorAll('item, entry');
-            }
+            const items = xml.querySelectorAll('item, entry');
             
             let unread = 0;
             items.forEach(item => {
@@ -378,6 +612,8 @@ function calculateReadingTime(text) {
 
 async function loadFeedPosts(url, feedName = '') {
     currentFeedUrl = url;
+    currentViewMode = 'feed';
+
     const container = document.getElementById('posts-container');
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade Artikel...</div></div>';
     
@@ -386,166 +622,139 @@ async function loadFeedPosts(url, feedName = '') {
     const activeRow = document.getElementById(`sidebar-feed-${safeId(url)}`);
     if (activeRow) activeRow.style.background = '#2c2c2c';
 
+    const allBtn = document.getElementById('sidebar-nav-all');
+    const favBtn = document.getElementById('sidebar-nav-favorites');
+    const sumBtn = document.getElementById('sidebar-nav-summary');
+    if (allBtn) { allBtn.style.background = 'transparent'; allBtn.style.color = '#aaa'; }
+    if (favBtn) { favBtn.style.background = 'transparent'; favBtn.style.color = '#aaa'; }
+    if (sumBtn) { sumBtn.style.background = 'transparent'; sumBtn.style.color = '#aaa'; }
+
     try {
-        const { data: { session } } = await db.auth.getSession();
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token}`
-            }, 
-            body: JSON.stringify({ url }) 
-        });
-        const xmlStr = await res.text();
-        let xml = new DOMParser().parseFromString(xmlStr, "text/xml");
+        const posts = await getFeedPosts(url, feedName);
+        renderPostsList(posts, feedName, url);
+    } catch (e) { 
+        container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; 
+    }
+}
+
+function renderPostsList(posts, headerTitle, feedUrl = null) {
+    const container = document.getElementById('posts-container');
+    if (!container) return;
+
+    if (currentViewMode === 'summary') {
+        let toolbarHtml = `
+            <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <span>${headerTitle}</span>
+            </div>
+            <div class="summary-toolbar" style="padding:15px; background:#1e1e1e; border-bottom:1px solid #333; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                <button class="action-btn" id="web-copy-summary" title="Links in die Zwischenablage kopieren" style="width:auto; padding:5px 15px; font-size:12px; height:auto;">Kopieren 📋</button>
+                <button class="action-btn" id="web-clear-summary" title="Zusammenfassungsliste leeren" style="width:auto; padding:5px 15px; font-size:12px; height:auto; background:#d93025; border-color:#d93025;">Liste leeren 🗑</button>
+                
+                <div style="border-left:1px solid #333; height:20px; margin:0 5px;"></div>
+                
+                <input type="password" id="web-gemini-key" placeholder="Gemini API Key" style="background:#2c2c2c; border:1px solid #444; color:white; padding:5px 10px; border-radius:4px; font-size:12px; width:180px;" />
+                <button class="action-btn" id="web-ai-report" title="KI-Zusammenfassung generieren" style="width:auto; padding:5px 15px; font-size:12px; height:auto; background:#ff9800; border-color:#ff9800;">Zusammenfassen 🤖</button>
+            </div>
+            <div id="summary-ai-output" style="display:none; padding:15px 15px 0 15px;"></div>
+        `;
         
-        // Check for parsing errors and apply fallback strategies
-        let parseError = xml.getElementsByTagName("parsererror");
-        if (parseError.length > 0) {
-            console.warn("XML parse error, trying text/html fallback.", parseError[0].textContent);
-            xml = new DOMParser().parseFromString(xmlStr, "text/html");
+        container.innerHTML = toolbarHtml;
+        
+        const keyInput = document.getElementById('web-gemini-key');
+        if (keyInput) {
+            keyInput.value = localStorage.getItem('gemini_api_key') || '';
+            keyInput.onchange = (e) => {
+                localStorage.setItem('gemini_api_key', e.target.value.trim());
+            };
+        }
+        
+        document.getElementById('web-copy-summary').onclick = copySummaryLinks;
+        document.getElementById('web-clear-summary').onclick = clearSummaryList;
+        document.getElementById('web-ai-report').onclick = generateAiSummary;
+        
+        if (!posts || posts.length === 0) {
+            const noPostsDiv = document.createElement('div');
+            noPostsDiv.style.cssText = "padding:40px; text-align:center; color:#888;";
+            noPostsDiv.innerText = "Keine Artikel in der Zusammenfassungsliste.";
+            container.appendChild(noPostsDiv);
+            return;
+        }
+    } else {
+        if (!posts || posts.length === 0) {
+            container.innerHTML = `
+                <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>${headerTitle}</span>
+                </div>
+                <div style="padding:40px; text-align:center; color:#888;">Keine Artikel gefunden.</div>
+            `;
+            return;
         }
 
-        const items = xml.querySelectorAll('item, entry');
-        container.innerHTML = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>${feedName || 'Feed'}</span>
-            <div style="display:flex; gap:10px;">
-                <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
-                <button class="action-btn" title="Ganzen Feed als ungelesen markieren" onclick="markFeedAsUnread('${url}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
-            </div>
-        </div>`;
+        let headerHtml = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>${headerTitle}</span>`;
         
-        items.forEach(item => {
-            const title = item.querySelector('title')?.textContent || 'Kein Titel';
-            let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
-            if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
-                link = item.querySelector('link[rel="alternate"]').getAttribute('href');
-            }
-            const descText = item.querySelector('description, summary, media\\:description')?.textContent || '';
-            let encodedText = "";
-            const ceNodes = item.getElementsByTagName('content:encoded');
-            if (ceNodes.length > 0) {
-              encodedText = ceNodes[0].textContent;
-            } else {
-              const encNodes = item.getElementsByTagName('encoded');
-              if (encNodes.length > 0) encodedText = encNodes[0].textContent;
-              else {
-                const contentNodes = item.getElementsByTagName('content');
-                if (contentNodes.length > 0 && !contentNodes[0].getAttribute('url')) encodedText = contentNodes[0].textContent;
-              }
-            }
-            const desc = descText;
-            const encoded = encodedText;
-            const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
-            
-            // --- Thumbnail & Duration Extraction ---
-            let thumbnail = '';
-            const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
-            let durationStr = '';
-            
-            if (ytId) {
-                thumbnail = `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`;
-                const cachedDuration = userData.duration_cache[ytId];
-                durationStr = cachedDuration ? cachedDuration : 'Video';
-            } else {
-                let mediaThumbnail = item.querySelector('thumbnail');
-                if (!mediaThumbnail) {
-                  const mtNodes = item.getElementsByTagName('media:thumbnail');
-                  if (mtNodes.length > 0) mediaThumbnail = mtNodes[0];
-                }
-                if (mediaThumbnail && mediaThumbnail.getAttribute('url')) {
-                  thumbnail = mediaThumbnail.getAttribute('url');
-                }
+        if (feedUrl) {
+            headerHtml += `
+            <div style="display:flex; gap:10px;">
+                <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
+                <button class="action-btn" title="Ganzen Feed als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
+            </div>`;
+        }
+        headerHtml += `</div>`;
+        container.innerHTML = headerHtml;
+    }
 
-                if (!thumbnail) {
-                    const mediaContentNodes = item.getElementsByTagName('media:content');
-                    for (const node of mediaContentNodes) {
-                        const medium = node.getAttribute('medium');
-                        const type = node.getAttribute('type');
-                        if (medium === 'image' || (type && type.startsWith('image'))) {
-                            thumbnail = node.getAttribute('url');
-                            if (thumbnail) break;
-                        }
-                    }
-                }
-
-                if (!thumbnail) {
-                    const enclosureNodes = item.getElementsByTagName('enclosure');
-                    for (const node of enclosureNodes) {
-                        const type = node.getAttribute('type');
-                        if (type && type.startsWith('image')) {
-                            thumbnail = node.getAttribute('url');
-                            if (thumbnail) break;
-                        }
-                    }
-                }
-                
-                if (!thumbnail) {
-                    const fullText = desc + encoded;
-                    // Suche nach allen img-Tags, nicht nur dem ersten, support single and double quotes
-                    const imgMatches = fullText.matchAll(/<img[^>]+src=["']([^"'>]+)["']/gi);
-                    for (const match of imgMatches) {
-                        const imgUrl = match[1];
-                        // Überspringe typische Tracking-Pixel (häufig bei Substack & Newslettern)
-                        if (!imgUrl.includes('1x1') && !imgUrl.includes('tracking') && !imgUrl.endsWith('.gif') && imgUrl.startsWith('http')) {
-                            thumbnail = imgUrl;
-                            break;
-                        }
-                    }
-                }
-                durationStr = `${calculateReadingTime(desc+encoded)} min read`;
-            }
-
-            const row = document.createElement('div'); 
-            row.className = 'post-row';
-            row.dataset.link = link;
-            const isRead = userData.read_links.includes(link);
-            const isFav = userData.favorited_links.includes(link);
-            const isSum = userData.summary_links && userData.summary_links.includes(link);
-            if (isRead) row.style.opacity = '0.5';
-            
-            row.innerHTML = `
-                <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                    <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+    posts.forEach(post => {
+        const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
+        const row = document.createElement('div'); 
+        row.className = 'post-row';
+        row.dataset.link = link;
+        const isRead = userData.read_links.includes(link);
+        const isFav = userData.favorited_links.includes(link);
+        const isSum = userData.summary_links && userData.summary_links.includes(link);
+        if (isRead) row.style.opacity = '0.5';
+        
+        row.innerHTML = `
+            <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+            </a>
+            <div class="post-info">
+                <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                    ${title}
                 </a>
-                <div class="post-info">
-                    <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                        ${title}
-                    </a>
-                    <div class="post-meta">
-                        <span>${getRelativeTime(pubDate)}</span>
-                        <span style="margin-left:auto; color:#555;">(${durationStr})</span>
-                    </div>
+                <div class="post-meta">
+                    <span>${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</span>
+                    <span style="margin-left:auto; color:#555;">(${durationStr})</span>
                 </div>
-                <div class="post-actions" style="display:flex; gap:5px;">
-                    <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
-                    <button class="action-btn reader-btn" title="Reader">👓</button>
-                    <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
-                    <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
-                </div>
-            `;
-            
-            row.querySelector('.fav-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleFavorite(link, row.querySelector('.fav-btn'));
-            };
-            row.querySelector('.sum-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                toggleSummary(link, row.querySelector('.sum-btn'));
-            };
-            row.querySelector('.reader-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                openReader({title, link, desc: desc+encoded, thumbnail});
-            };
-            row.querySelector('.unread-btn').onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                markAsUnread(link, row);
-            };
+            </div>
+            <div class="post-actions" style="display:flex; gap:5px;">
+                <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
+                <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
+                <button class="action-btn reader-btn" title="Reader">👓</button>
+                <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
+                <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
+            </div>
+        `;
+        
+        row.querySelector('.fav-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            toggleFavorite(link, row.querySelector('.fav-btn'));
+        };
+        row.querySelector('.sum-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            toggleSummary(link, row.querySelector('.sum-btn'));
+        };
+        row.querySelector('.reader-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            openReader({title, link, desc, thumbnail});
+        };
+        row.querySelector('.unread-btn').onclick = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            markAsUnread(link, row);
+        };
 
-            container.appendChild(row);
-        });
-    } catch (e) { container.innerHTML = `<div style="padding:20px; color:red;">${e.message}</div>`; }
+        container.appendChild(row);
+    });
 }
 
 async function markFeedAsUnread(feedUrl) {
@@ -662,6 +871,15 @@ async function toggleFavorite(link, btn) {
         userData.favorited_links = userData.favorited_links.filter(l => l !== link);
         btn.innerText = '☆';
         btn.style.setProperty('color', 'white', 'important');
+        
+        if (currentViewMode === 'favorites') {
+            const row = btn.closest('.post-row');
+            if (row) {
+                row.style.transition = 'opacity 0.3s, max-height 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => { row.remove(); }, 300);
+            }
+        }
     } else {
         userData.favorited_links.push(link);
         btn.innerText = '★';
@@ -681,6 +899,15 @@ async function toggleSummary(link, btn) {
     if (isSum) {
         userData.summary_links = userData.summary_links.filter(l => l !== link);
         btn.style.setProperty('filter', 'grayscale(1)', 'important');
+        
+        if (currentViewMode === 'summary') {
+            const row = btn.closest('.post-row');
+            if (row) {
+                row.style.transition = 'opacity 0.3s, max-height 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => { row.remove(); }, 300);
+            }
+        }
     } else {
         userData.summary_links.push(link);
         btn.style.setProperty('filter', 'sepia(1) saturate(5) hue-rotate(90deg)', 'important');
@@ -691,6 +918,190 @@ async function toggleSummary(link, btn) {
             .update({ summary_links: userData.summary_links })
             .eq('id', currentUser.id);
     } catch (e) { console.error("Sync Summary Error:", e); }
+}
+
+async function getAvailableGeminiModels(apiKey) {
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch models: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data && data.models) {
+            const supportedModels = data.models
+                .filter(model => {
+                    return model.name.includes('gemini') && 
+                           (model.supportedGenerationMethods.includes('generateContent') || 
+                            model.supportedGenerationMethods.includes('generateText'));
+                })
+                .map(model => model.name.split('/').pop());
+            
+            if (supportedModels.length > 0) {
+                supportedModels.sort((a, b) => {
+                    if (a.includes('flash') && !b.includes('flash')) return -1;
+                    if (!a.includes('flash') && b.includes('flash')) return 1;
+                    return 0;
+                });
+            }
+            return supportedModels;
+        } else {
+            return ['gemini-1.5-flash-latest', 'gemini-pro-latest'];
+        }
+    } catch (error) {
+        console.error('Failed to fetch available models, using fallback list:', error);
+        return ['gemini-1.5-flash-latest', 'gemini-pro-latest'];
+    }
+}
+
+async function generateAiSummary() {
+    const outputContainer = document.getElementById('summary-ai-output');
+    if (!outputContainer) return;
+    
+    const geminiApiKey = localStorage.getItem('gemini_api_key') || '';
+    if (!geminiApiKey || geminiApiKey.trim() === '') {
+        alert("Bitte gib zuerst einen gültigen Google Gemini API Key in das Textfeld ein.");
+        return;
+    }
+    
+    const rows = document.querySelectorAll('.post-row');
+    const postsToSummarize = [];
+    rows.forEach(row => {
+        const titleEl = row.querySelector('.post-title');
+        const link = row.dataset.link;
+        if (titleEl && link) {
+            postsToSummarize.push({
+                title: titleEl.innerText.trim(),
+                link: link,
+                description: row.querySelector('.post-meta')?.innerText || ''
+            });
+        }
+    });
+    
+    if (postsToSummarize.length === 0) {
+        alert("Deine Zusammenfassungsliste ist leer.");
+        return;
+    }
+    
+    outputContainer.innerHTML = `
+        <div style="background:#1e1e1e; border:1px solid #ff9800; border-radius:8px; padding:20px; margin-bottom:20px; text-align:center;">
+            <div class="spinner"></div>
+            <div style="margin-top:10px; color:#ff9800; font-weight:bold;">Zusammenfassung wird über Gemini generiert...</div>
+        </div>
+    `;
+    outputContainer.style.display = 'block';
+    
+    try {
+        let promptText = "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use German language for the summary:\n\n";
+        
+        postsToSummarize.forEach((post, index) => {
+            promptText += `### Article ${index + 1}: ${post.title}\n`;
+            promptText += `Link: ${post.link}\n`;
+            promptText += `Content info: ${post.description.substring(0, 1000)}\n\n`;
+        });
+        
+        const modelsToTry = await getAvailableGeminiModels(geminiApiKey);
+        let response = null;
+        let lastErrorData = null;
+        
+        for (const model of modelsToTry) {
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: promptText }]
+                    }]
+                })
+            });
+            if (response.ok) break;
+            else lastErrorData = await response.json();
+        }
+        
+        if (!response || !response.ok) {
+            throw new Error(lastErrorData?.error?.message || 'API Request failed for all models');
+        }
+        
+        const data = await response.json();
+        const markdownReport = data.candidates[0].content.parts[0].text;
+        
+        const htmlContent = window.marked ? window.marked.parse(markdownReport) : markdownReport;
+        
+        outputContainer.innerHTML = `
+            <div style="background:#1e1e1e; border:1px solid #333; border-radius:8px; padding:20px; margin-bottom:20px; line-height:1.6; position:relative;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px;">
+                    <strong style="color:#ff9800; font-size:16px;">🤖 KI-Zusammenfassung (Gemini)</strong>
+                    <button class="action-btn" id="copy-report-text" style="width:auto; padding:3px 10px; font-size:11px; height:auto;" title="Kopieren">Kopieren 📋</button>
+                </div>
+                <div id="ai-report-body" style="color:#eee; font-size:14px; overflow-y:auto; max-height:400px; text-align:left;">${htmlContent}</div>
+            </div>
+        `;
+        
+        document.getElementById('copy-report-text').onclick = async () => {
+            try {
+                await navigator.clipboard.writeText(markdownReport);
+                alert("Zusammenfassungsbericht in die Zwischenablage kopiert!");
+            } catch(err) {
+                console.error("Kopieren fehlgeschlagen:", err);
+            }
+        };
+        
+    } catch(e) {
+        outputContainer.innerHTML = `
+            <div style="background:#1e1e1e; border:1px solid #ff4444; border-radius:8px; padding:20px; margin-bottom:20px; color:#ff4444; text-align:center;">
+                <strong>Fehler beim Generieren der Zusammenfassung:</strong>
+                <p>${e.message}</p>
+            </div>
+        `;
+    }
+}
+
+async function copySummaryLinks() {
+    const rows = document.querySelectorAll('.post-row');
+    const links = [];
+    rows.forEach(row => {
+        const link = row.dataset.link;
+        const titleEl = row.querySelector('.post-title');
+        if (link && titleEl) {
+            links.push(`- [${titleEl.innerText.trim()}](${link})`);
+        }
+    });
+    
+    if (links.length === 0) {
+        alert("Deine Zusammenfassungsliste ist leer.");
+        return;
+    }
+    
+    try {
+        await navigator.clipboard.writeText(links.join('\n'));
+        alert("Links als Markdown-Liste kopiert!");
+    } catch(e) {
+        console.error("Fehler beim Kopieren:", e);
+    }
+}
+
+async function clearSummaryList() {
+    if (!confirm("Bist du sicher, dass du die gesamte Zusammenfassungsliste leeren möchtest?")) return;
+    
+    userData.summary_links = [];
+    const container = document.getElementById('posts-container');
+    
+    const rows = container.querySelectorAll('.post-row');
+    rows.forEach(row => {
+        row.style.transition = 'opacity 0.3s, max-height 0.3s';
+        row.style.opacity = '0';
+    });
+    
+    setTimeout(() => {
+        renderPostsList([], "Summary List");
+    }, 300);
+    
+    try {
+        await db.from('user_settings')
+            .update({ summary_links: [] })
+            .eq('id', currentUser.id);
+    } catch(e) {
+        console.error("Sync Summary Clear Error:", e);
+    }
 }
 
 async function openReader(post) {
