@@ -790,3 +790,13 @@ main {
 #summary-toolbar button.delete-btn:hover {
   background-color: #b7271e !important;
 }
+
+/* Keyword Match row styling */
+.post-row.keyword-match {
+  background-color: var(--keyword-bg) !important;
+  border-left: 4px solid var(--keyword-border) !important;
+}
+.dark-mode .post-row.keyword-match {
+  background-color: rgba(255, 152, 0, 0.1) !important;
+  border-left: 4px solid var(--primary-orange) !important;
+}

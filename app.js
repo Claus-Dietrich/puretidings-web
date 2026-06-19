@@ -5,6 +5,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 let db;
 let currentUser = null;
 let currentFeedUrl = null;
+let currentFeedName = '';
 let currentViewMode = 'feed'; // 'feed', 'all', 'favorites', 'summary'
 let summarySubMode = 'list'; // 'list' or 'report'
 let summaryDateFilterVal = 'all';
@@ -22,6 +23,172 @@ let userData = {
     read_links: [],
     duration_cache: {}
 };
+
+// Rules Engine Hilfsfunktionen
+function getWebRules() {
+    try {
+        const val = localStorage.getItem('web_rules');
+        return val ? JSON.parse(val) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveWebRules(rules) {
+    try {
+        localStorage.setItem('web_rules', JSON.stringify(rules));
+    } catch (e) {
+        console.error("Error saving rules:", e);
+    }
+}
+
+function getHiddenKeywordLinks() {
+    try {
+        const val = localStorage.getItem('web_hidden_keyword_links');
+        return val ? JSON.parse(val) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveHiddenKeywordLinks(links) {
+    try {
+        localStorage.setItem('web_hidden_keyword_links', JSON.stringify(links));
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function applyRulesToPost(post, rules) {
+    if (!post) return post;
+    post.matchedRules = [];
+    post.isHidden = false;
+
+    const enabledRules = rules.filter(rule => rule.enabled !== false);
+    
+    enabledRules.forEach(rule => {
+        let postValue = '';
+        if (rule.field === 'title') {
+            postValue = String(post.title || '').toLowerCase();
+        } else if (rule.field === 'author') {
+            postValue = String(post.author || '').toLowerCase();
+        } else {
+            postValue = String(post.desc || '').toLowerCase();
+        }
+
+        const ruleKeywords = String(rule.value || '').toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+        if (ruleKeywords.length === 0) return;
+
+        let match = false;
+        let matchedKeyword = '';
+
+        switch (rule.condition) {
+          case 'contains': match = !!(matchedKeyword = ruleKeywords.find(k => postValue.includes(k))); break;
+          case 'not-contains': match = !ruleKeywords.some(k => postValue.includes(k)); break;
+          case 'equals': match = !!(matchedKeyword = ruleKeywords.find(k => postValue === k)); break;
+        }
+
+        if (match) {
+          if (!post.matchedRules.some(m => m.id === rule.id)) {
+              post.matchedRules.push({ id: rule.id, value: matchedKeyword || rule.value });
+          }
+          
+          switch (rule.action) {
+            case 'markAsRead': 
+                if (userData.read_links && !userData.read_links.includes(post.link)) {
+                    userData.read_links.push(post.link);
+                    updateCloudSettings({ read_links: userData.read_links }).catch(e => console.error(e));
+                }
+                break;
+            case 'hide': 
+                post.isHidden = true; 
+                break;
+          }
+        }
+    });
+    
+    return post;
+}
+
+function renderSettingsRules() {
+    const rulesList = document.getElementById('settings-rules-list');
+    if (!rulesList) return;
+    
+    const rules = getWebRules();
+    if (rules.length === 0) {
+        rulesList.innerHTML = '<div style="color:var(--text-color-darker); font-style:italic; padding: 4px 0;">Keine Regeln definiert.</div>';
+        return;
+    }
+    
+    let html = '<div style="display:flex; flex-direction:column; gap:6px; max-height: 150px; overflow-y:auto; padding-right:5px; margin-bottom:10px;">';
+    rules.forEach((rule, index) => {
+        const fieldMap = { title: 'Titel', author: 'Autor', desc: 'Inhalt' };
+        const condMap = { contains: 'enthält', 'not-contains': 'enthält nicht', equals: 'ist gleich' };
+        const actMap = { notify: 'Markieren', markAsRead: 'Gelesen', hide: 'Ausblenden' };
+        
+        html += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:4px; gap:8px;">
+                <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="WENN ${fieldMap[rule.field]} ${condMap[rule.condition]} '${rule.value}' DANN ${actMap[rule.action]}">
+                    <strong>WENN</strong> ${fieldMap[rule.field]} ${condMap[rule.condition]} <strong>'${rule.value}'</strong> <strong>DANN</strong> ${actMap[rule.action]}
+                </div>
+                <span onclick="deleteWebRule(${index})" style="color:#d93025; font-weight:bold; cursor:pointer; font-size:14px; padding: 0 4px;" title="Regel löschen">🗑️</span>
+            </div>
+        `;
+    });
+    html += '</div>';
+    rulesList.innerHTML = html;
+}
+
+window.deleteWebRule = (index) => {
+    const rules = getWebRules();
+    rules.splice(index, 1);
+    saveWebRules(rules);
+    renderSettingsRules();
+    if (currentFeedUrl) {
+        loadFeedPosts(currentFeedUrl, currentFeedName);
+    } else {
+        showView(currentViewMode);
+    }
+};
+
+function setupRulesEvents() {
+    const addBtn = document.getElementById('new-rule-add-btn');
+    if (addBtn) {
+        addBtn.onclick = () => {
+            const field = document.getElementById('new-rule-field').value;
+            const condition = document.getElementById('new-rule-condition').value;
+            const valInput = document.getElementById('new-rule-value');
+            const value = valInput.value.trim();
+            const action = document.getElementById('new-rule-action').value;
+            
+            if (!value) {
+                alert("Bitte gib ein Schlüsselwort ein.");
+                return;
+            }
+            
+            const newRule = {
+                id: 'rule-' + Date.now(),
+                field,
+                condition,
+                value,
+                action,
+                enabled: true
+            };
+            
+            const rules = getWebRules();
+            rules.push(newRule);
+            saveWebRules(rules);
+            valInput.value = '';
+            renderSettingsRules();
+            
+            if (currentFeedUrl) {
+                loadFeedPosts(currentFeedUrl, currentFeedName);
+            } else {
+                showView(currentViewMode);
+            }
+        };
+    }
+}
 
 // Hilfsfunktion: Zeigt Fehlermeldung direkt auf der Seite an (für besseres Debugging)
 function showErrorOnScreen(msg) {
@@ -125,8 +292,10 @@ async function init() {
             settingsGeminiKey.value = localStorage.getItem('gemini_api_key') || '';
             settingsAiPrompt.value = localStorage.getItem('gemini_ai_prompt') || '';
             settingsYtPrompt.value = localStorage.getItem('gemini_yt_prompt') || '';
+            renderSettingsRules();
             settingsOverlay.style.display = 'flex';
         };
+        setupRulesEvents();
     }
     if (settingsClose && settingsOverlay) {
         settingsClose.onclick = () => {
@@ -568,6 +737,7 @@ function renderSidebar(tree) {
             <div id="sidebar-nav-all" onclick="showView('all')" class="sidebar-item"><span>🏠</span> All Posts</div>
             <div id="sidebar-nav-unread" onclick="showView('unread')" class="sidebar-item"><span>✉️</span> Unread Posts</div>
             <div id="sidebar-nav-favorites" onclick="showView('favorites')" class="sidebar-item"><span>⭐</span> Favorites</div>
+            <div id="sidebar-nav-keywords" onclick="showView('keywords')" class="sidebar-item"><span>🔍</span> Keyword Matches</div>
             <div id="sidebar-nav-summary" onclick="showView('summary')" class="sidebar-item"><span>📋</span> Summary List</div>
         </div>
         <h3 id="sidebar-feeds-header">
@@ -1034,6 +1204,11 @@ async function getFeedPosts(url, feedName = '') {
             });
         });
         
+        const rules = getWebRules();
+        posts.forEach(post => {
+            applyRulesToPost(post, rules);
+        });
+        
         globalPostsCache[url] = posts;
         return posts;
     } catch (e) {
@@ -1111,6 +1286,7 @@ function updateSidebarTreeForUnread() {
 async function showView(view) {
     currentViewMode = view;
     currentFeedUrl = null;
+    currentFeedName = '';
 
     updateSidebarTreeForUnread();
 
@@ -1124,15 +1300,17 @@ async function showView(view) {
     const allBtn = document.getElementById('sidebar-nav-all');
     const unreadBtn = document.getElementById('sidebar-nav-unread');
     const favBtn = document.getElementById('sidebar-nav-favorites');
+    const keyBtn = document.getElementById('sidebar-nav-keywords');
     const sumBtn = document.getElementById('sidebar-nav-summary');
     
     if (view === 'all' && allBtn) allBtn.classList.add('active');
     if (view === 'unread' && unreadBtn) unreadBtn.classList.add('active');
     if (view === 'favorites' && favBtn) favBtn.classList.add('active');
+    if (view === 'keywords' && keyBtn) keyBtn.classList.add('active');
     if (view === 'summary' && sumBtn) sumBtn.classList.add('active');
     
     const container = document.getElementById('posts-container');
-    container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade ${view === 'all' ? 'alle' : (view === 'unread' ? 'ungelesene' : (view === 'favorites' ? 'Favoriten-' : 'Zusammenfassungs-'))} Artikel...</div></div>`;
+    container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade ${view === 'all' ? 'alle' : (view === 'unread' ? 'ungelesene' : (view === 'favorites' ? 'Favoriten-' : (view === 'keywords' ? 'Keyword-' : 'Zusammenfassungs-')))} Artikel...</div></div>`;
     
     const feeds = getAllFeeds();
     if (feeds.length === 0) {
@@ -1194,6 +1372,27 @@ async function showView(view) {
             
             favPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
             renderPostsList(favPosts, "Favorites");
+        } else if (view === 'keywords') {
+            const hiddenLinks = getHiddenKeywordLinks();
+            let keyPosts = allPosts.filter(post => 
+                post.matchedRules && 
+                post.matchedRules.length > 0 && 
+                !hiddenLinks.includes(post.link)
+            );
+            
+            // Apply date filtering
+            const { start, end } = getWebSummaryFilters();
+            keyPosts = keyPosts.filter(post => {
+                if (!post.pubDate) return true;
+                const postDate = new Date(post.pubDate);
+                if (isNaN(postDate.getTime())) return true;
+                if (start && postDate < start) return false;
+                if (end && postDate > end) return false;
+                return true;
+            });
+            
+            keyPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            renderPostsList(keyPosts, "Keyword Matches");
         } else if (view === 'summary') {
             let sumPosts = allPosts.filter(post => userData.summary_links.includes(post.link));
             
@@ -1601,6 +1800,7 @@ function calculateReadingTime(text) {
 // --- FEED LOADING ---
 
 async function loadFeedPosts(url, feedName = '') {
+    currentFeedName = feedName;
     // Determine view mode context
     if (currentViewMode !== 'favorites' && currentViewMode !== 'summary' && currentViewMode !== 'unread') {
         currentViewMode = 'feed';
@@ -1711,8 +1911,8 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     <button id="web-full-view-summary" class="secondary-btn">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
                     </button>
-                    <button id="web-clear-list" class="delete-btn" style="${(currentViewMode === 'all' || currentViewMode === 'feed' || currentFeedUrl) ? 'display:none;' : ''}">
-                        ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : 'Liste leeren 🗑'}
+                    <button id="web-clear-list" class="delete-btn" style="${((currentViewMode === 'favorites' || currentViewMode === 'summary' || currentViewMode === 'keywords') && !currentFeedUrl) ? '' : 'display:none;'}">
+                        ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : (currentViewMode === 'keywords' ? 'Matches leeren 🗑' : 'Liste leeren 🗑')}
                     </button>
                 </div>
                 <span id="web-copy-status" class="status-message-inline"></span>
@@ -1792,7 +1992,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         if (!posts || posts.length === 0) {
             const noPostsDiv = document.createElement('div');
             noPostsDiv.style.cssText = "padding:40px; text-align:center; color:#888;";
-            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : (currentViewMode === 'all' ? "Keine Artikel vorhanden." : (currentViewMode === 'feed' ? "Keine Artikel in diesem Kanal gefunden." : "Keine Artikel in der Zusammenfassungsliste."));
+            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : (currentViewMode === 'keywords' ? "Keine Artikel entsprechen deinen Keyword-Regeln." : (currentViewMode === 'all' ? "Keine Artikel vorhanden." : (currentViewMode === 'feed' ? "Keine Artikel in diesem Kanal gefunden." : "Keine Artikel in der Zusammenfassungsliste.")));
             container.appendChild(noPostsDiv);
             return;
         }
@@ -1824,7 +2024,8 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
     posts.forEach(post => {
         const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
         const row = document.createElement('div'); 
-        row.className = 'post-row';
+        const isKeywordMatch = post.matchedRules && post.matchedRules.length > 0;
+        row.className = 'post-row' + (isKeywordMatch ? ' keyword-match' : '');
         row.dataset.link = link;
         row.postData = post; // Attach post data for search/copy/AI summary
         
@@ -2318,6 +2519,27 @@ async function clearCurrentList() {
         try {
             await updateCloudSettings({ favorited_links: [] });
         } catch(e) { console.error("Sync Favorites Clear Error:", e); }
+    } else if (currentViewMode === 'keywords') {
+        if (!confirm("Bist du sicher, dass du alle Keyword-Matches löschen (ausblenden) möchtest?")) return;
+        
+        const currentlyFilteredPosts = getCurrentlyFilteredWebPosts();
+        const currentlyFilteredLinks = currentlyFilteredPosts.map(p => p.link);
+        
+        const hiddenLinks = getHiddenKeywordLinks();
+        currentlyFilteredLinks.forEach(link => {
+            if (!hiddenLinks.includes(link)) {
+                hiddenLinks.push(link);
+            }
+        });
+        saveHiddenKeywordLinks(hiddenLinks);
+        
+        const container = document.getElementById('posts-container');
+        const rows = container.querySelectorAll('.post-row, .post-item');
+        rows.forEach(row => {
+            row.style.transition = 'opacity 0.3s, max-height 0.3s';
+            row.style.opacity = '0';
+        });
+        setTimeout(() => { renderPostsList([], "Keyword Matches"); }, 300);
     } else {
         await clearSummaryList();
     }
