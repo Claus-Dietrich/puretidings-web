@@ -573,6 +573,29 @@ async function saveFeedTreeToDatabase() {
     }
 }
 
+async function updateCloudSettings(payload) {
+    if (!currentUser) return;
+    try {
+        const nowStr = new Date().toISOString();
+        const fullPayload = {
+            ...payload,
+            updated_at: nowStr
+        };
+        await db.from('user_settings').update(fullPayload).eq('id', currentUser.id);
+
+        // Notify Extension to sync settings immediately
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            const extensionId = 'faeeldkkipajnnbkajhdanhbhilfifah';
+            chrome.runtime.sendMessage(extensionId, {
+                action: "syncSession",
+                email: currentUser.email
+            });
+        }
+    } catch (e) {
+        console.error("updateCloudSettings error:", e);
+    }
+}
+
 function handleAddFeedPrompt() {
     const name = prompt("Name des Feeds:");
     if (!name) return;
@@ -1704,7 +1727,7 @@ async function markFeedAsUnread(feedUrl) {
         }
 
         try {
-            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+            await updateCloudSettings({ read_links: userData.read_links });
         } catch (e) { console.error("Sync Mark Feed As Unread Error:", e); }
     }
     updateSidebarTreeForUnread();
@@ -1729,7 +1752,7 @@ async function markFeedAsRead(feedUrl) {
         if (countEl) countEl.style.display = 'none';
 
         try {
-            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+            await updateCloudSettings({ read_links: userData.read_links });
         } catch (e) { console.error("Sync Mark Feed As Read Error:", e); }
     }
     updateSidebarTreeForUnread();
@@ -1766,7 +1789,7 @@ async function markAllAsRead() {
 
     if (changed || rows.length > 0) {
         try {
-            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+            await updateCloudSettings({ read_links: userData.read_links });
         } catch (e) { console.error("Sync Mark All Read Error:", e); }
     }
     updateSidebarTreeForUnread();
@@ -1805,7 +1828,7 @@ async function markAllAsUnread() {
     });
 
     try {
-        await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+        await updateCloudSettings({ read_links: userData.read_links });
     } catch (e) { console.error("Sync Mark All Unread Error:", e); }
 
     updateSidebarTreeForUnread();
@@ -1837,7 +1860,7 @@ async function markAsUnread(link, row) {
     }
 
     try {
-        await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+        await updateCloudSettings({ read_links: userData.read_links });
     } catch (e) { console.error("Sync Mark As Unread Error:", e); }
     updateSidebarTreeForUnread();
 }
@@ -1881,7 +1904,7 @@ async function markAsRead(link) {
         }
 
         try {
-            await db.from('user_settings').update({ read_links: userData.read_links }).eq('id', currentUser.id);
+            await updateCloudSettings({ read_links: userData.read_links });
         } catch (e) { console.error("Sync Read Status Error:", e); }
         updateSidebarTreeForUnread();
     }
@@ -1914,9 +1937,7 @@ async function toggleFavorite(link, btn) {
     }
 
     try {
-        await db.from('user_settings')
-            .update({ favorited_links: userData.favorited_links })
-            .eq('id', currentUser.id);
+        await updateCloudSettings({ favorited_links: userData.favorited_links });
     } catch (e) { console.error("Sync Favorite Error:", e); }
 }
 
@@ -1946,9 +1967,7 @@ async function toggleSummary(link, btn) {
     }
 
     try {
-        await db.from('user_settings')
-            .update({ summary_links: userData.summary_links })
-            .eq('id', currentUser.id);
+        await updateCloudSettings({ summary_links: userData.summary_links });
     } catch (e) { console.error("Sync Summary Error:", e); }
 }
 
@@ -2108,9 +2127,7 @@ async function clearCurrentList() {
         setTimeout(() => { renderPostsList([], "Favorites"); }, 300);
         
         try {
-            await db.from('user_settings')
-                .update({ favorited_links: [] })
-                .eq('id', currentUser.id);
+            await updateCloudSettings({ favorited_links: [] });
         } catch(e) { console.error("Sync Favorites Clear Error:", e); }
     } else {
         await clearSummaryList();
@@ -2134,9 +2151,7 @@ async function clearSummaryList() {
     }, 300);
     
     try {
-        await db.from('user_settings')
-            .update({ summary_links: [] })
-            .eq('id', currentUser.id);
+        await updateCloudSettings({ summary_links: [] });
     } catch(e) {
         console.error("Sync Summary Clear Error:", e);
     }
@@ -2354,7 +2369,7 @@ async function openReader(post) {
             }
         });
         try {
-            await db.from('user_settings').update({ favorited_links: userData.favorited_links }).eq('id', currentUser.id);
+            await updateCloudSettings({ favorited_links: userData.favorited_links });
         } catch(e) { console.error("Star Sync Error:", e); }
     };
 
@@ -2375,7 +2390,7 @@ async function openReader(post) {
             }
         });
         try {
-            await db.from('user_settings').update({ summary_links: userData.summary_links }).eq('id', currentUser.id);
+            await updateCloudSettings({ summary_links: userData.summary_links });
         } catch(e) { console.error("Summary Sync Error:", e); }
     };
 
