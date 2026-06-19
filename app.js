@@ -126,8 +126,19 @@ async function init() {
                 await db.from('user_settings').update({
                     gemini_api_key: apiKey,
                     gemini_ai_prompt: aiPrompt,
-                    gemini_yt_prompt: ytPrompt
+                    gemini_yt_prompt: ytPrompt,
+                    updated_at: new Date().toISOString()
                 }).eq('id', currentUser.id);
+
+                // Notify Extension to sync settings immediately
+                if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+                    const extensionId = 'faeeldkkipajnnbkajhdanhbhilfifah';
+                    chrome.runtime.sendMessage(extensionId, {
+                        action: "syncSession",
+                        email: currentUser.email
+                    });
+                }
+
                 alert("Einstellungen lokal und in der Cloud gespeichert!");
             } catch (e) {
                 console.error("Cloud-Speicherungsfehler:", e);
@@ -344,9 +355,31 @@ function renderSidebar(tree) {
             <div id="sidebar-nav-favorites" onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px; margin-bottom:5px;"><span>⭐</span> Favorites</div>
             <div id="sidebar-nav-summary" onclick="showView('summary')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px;"><span>📋</span> Summary List</div>
         </div>
-        <h3 style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0;">My Feeds</h3>
+        <h3 style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0; display:flex; justify-content:space-between; align-items:center;">
+            <span>My Feeds</span>
+            <div style="display:flex; gap:10px; text-transform:none;">
+                <span id="add-feed-btn" title="Feed hinzufügen" style="cursor:pointer; color:#ff9800; font-weight:bold; font-size:12px;">+ Feed</span>
+                <span id="add-folder-btn" title="Ordner hinzufügen" style="cursor:pointer; color:#ff9800; font-weight:bold; font-size:12px;">+ Ordner</span>
+            </div>
+        </h3>
         <div id="feed-list-items" style="padding-bottom: 20px;"></div>
     `;
+
+    // Bind add button handlers
+    const addFeedBtn = document.getElementById('add-feed-btn');
+    if (addFeedBtn) {
+        addFeedBtn.onclick = (e) => {
+            e.stopPropagation();
+            handleAddFeedPrompt();
+        };
+    }
+    const addFolderBtn = document.getElementById('add-folder-btn');
+    if (addFolderBtn) {
+        addFolderBtn.onclick = (e) => {
+            e.stopPropagation();
+            handleAddFolderPrompt();
+        };
+    }
     
     const list = document.getElementById('feed-list-items');
     
@@ -362,7 +395,14 @@ function renderSidebar(tree) {
             li.className = 'sidebar-item-row';
 
             if (n.type === 'folder') {
-                li.innerHTML = `<span class="folder-toggle" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> <span style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#888;">${n.name.toUpperCase()}</span>`;
+                li.innerHTML = `
+                    <span class="folder-toggle" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> 
+                    <span style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#888;">${n.name.toUpperCase()}</span>
+                    <span class="edit-actions" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
+                        <span class="edit-btn" title="Umbenennen" style="opacity:0.6; cursor:pointer;">✏️</span>
+                        <span class="delete-btn" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
+                    </span>
+                `;
                 li.onclick = (e) => {
                     const toggle = li.querySelector('.folder-toggle');
                     const childrenContainer = li.nextElementSibling;
@@ -371,6 +411,23 @@ function renderSidebar(tree) {
                     toggle.innerText = isHidden ? '▼' : '▶';
                     e.stopPropagation();
                 };
+                
+                // Add event listeners for edit and delete on folder
+                const editBtn = li.querySelector('.edit-btn');
+                if (editBtn) {
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        handleRenameNode(n);
+                    };
+                }
+                const deleteBtn = li.querySelector('.delete-btn');
+                if (deleteBtn) {
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        handleDeleteNode(n);
+                    };
+                }
+
                 parentEl.appendChild(li);
                 
                 const childrenContainer = document.createElement('div');
@@ -381,12 +438,194 @@ function renderSidebar(tree) {
                 const id = getFeedId(n.url);
                 li.id = `sidebar-feed-${id}`;
                 const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${new URL(n.url).hostname}`;
-                li.innerHTML = `<img src="${favicon}" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span><span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>`;
+                li.innerHTML = `
+                    <img src="${favicon}" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> 
+                    <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span>
+                    <span class="unread-count" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>
+                    <span class="edit-actions" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
+                        <span class="edit-btn" title="Bearbeiten" style="opacity:0.6; cursor:pointer;">✏️</span>
+                        <span class="delete-btn" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
+                    </span>
+                `;
                 li.onclick = () => loadFeedPosts(n.url, n.name);
+
+                // Add event listeners for edit and delete on feed
+                const editBtn = li.querySelector('.edit-btn');
+                if (editBtn) {
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        handleEditFeed(n);
+                    };
+                }
+                const deleteBtn = li.querySelector('.delete-btn');
+                if (deleteBtn) {
+                    deleteBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        handleDeleteNode(n);
+                    };
+                }
+
                 parentEl.appendChild(li);
+            }
+
+            // Hover actions display
+            li.onmouseenter = () => {
+                const actions = li.querySelector('.edit-actions');
+                if (actions) actions.style.display = 'flex';
+            };
+            li.onmouseleave = () => {
+                const actions = li.querySelector('.edit-actions');
+                if (actions) actions.style.display = 'none';
+            };
+        });
+    }
+    walk(tree, list);
+}
+
+async function saveFeedTreeToDatabase() {
+    try {
+        const nowStr = new Date().toISOString();
+        await db.from('user_settings')
+            .update({ 
+                feed_tree: userData.feed_tree,
+                updated_at: nowStr
+            })
+            .eq('id', currentUser.id);
+
+        // Notify Extension to sync settings/feed_tree immediately
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            const extensionId = 'faeeldkkipajnnbkajhdanhbhilfifah';
+            chrome.runtime.sendMessage(extensionId, {
+                action: "syncSession",
+                email: currentUser.email
+            });
+        }
+        
+        renderSidebar(userData.feed_tree);
+        calculateAllUnreadCounts();
+    } catch (e) {
+        console.error("Fehler beim Speichern des Feed-Trees:", e);
+        alert("Fehler beim Speichern in der Cloud: " + e.message);
+    }
+}
+
+function handleAddFeedPrompt() {
+    const name = prompt("Name des Feeds:");
+    if (!name) return;
+    const url = prompt("RSS-URL des Feeds:", "https://");
+    if (!url || url === "https://") return;
+
+    // Check if feed folder list has folders to let them choose
+    const folders = [];
+    function findFolders(nodes) {
+        nodes.forEach(node => {
+            if (node.type === 'folder') {
+                folders.push(node);
+                if (node.children) findFolders(node.children);
             }
         });
     }
+    findFolders(userData.feed_tree);
+
+    let folderId = "";
+    if (folders.length > 0) {
+        const folderNames = folders.map((f, i) => `${i + 1}. ${f.name}`).join("\n");
+        const chosen = prompt(`In welchen Ordner soll der Feed?\n\nVerfügbare Ordner:\n${folderNames}\n\nGib die Nummer ein, oder drücke OK für die Hauptebene:`);
+        if (chosen) {
+            const idx = parseInt(chosen, 10) - 1;
+            if (idx >= 0 && idx < folders.length) {
+                folderId = folders[idx].id;
+            }
+        }
+    }
+
+    const newFeed = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        url: url.trim(),
+        type: 'feed',
+        fetchOgImage: false
+    };
+
+    if (folderId) {
+        const folder = findNodeById(userData.feed_tree, folderId);
+        if (folder) {
+            if (!folder.children) folder.children = [];
+            folder.children.push(newFeed);
+        }
+    } else {
+        userData.feed_tree.push(newFeed);
+    }
+
+    saveFeedTreeToDatabase();
+}
+
+function handleAddFolderPrompt() {
+    const name = prompt("Name des Ordners:");
+    if (!name || name.trim().length === 0) return;
+
+    const newFolder = {
+        id: crypto.randomUUID(),
+        name: name.trim(),
+        type: 'folder',
+        children: []
+    };
+
+    userData.feed_tree.push(newFolder);
+    saveFeedTreeToDatabase();
+}
+
+function handleRenameNode(node) {
+    const newName = prompt("Neuen Namen eingeben:", node.name);
+    if (!newName || newName.trim().length === 0) return;
+    node.name = newName.trim();
+    saveFeedTreeToDatabase();
+}
+
+function handleEditFeed(feedNode) {
+    const newName = prompt("Feed-Namen bearbeiten:", feedNode.name);
+    if (newName === null) return; // cancelled
+    
+    const newUrl = prompt("Feed-URL bearbeiten:", feedNode.url);
+    if (newUrl === null) return; // cancelled
+    
+    if (newName.trim()) feedNode.name = newName.trim();
+    if (newUrl.trim()) feedNode.url = newUrl.trim();
+    
+    saveFeedTreeToDatabase();
+}
+
+function handleDeleteNode(node) {
+    if (!confirm(`Möchtest du "${node.name}" wirklich löschen?`)) return;
+    
+    removeNodeFromTree(userData.feed_tree, node.id);
+    saveFeedTreeToDatabase();
+}
+
+function removeNodeFromTree(tree, nodeId) {
+    for (let i = 0; i < tree.length; i++) {
+        if (tree[i].id === nodeId) {
+            tree.splice(i, 1);
+            return true;
+        }
+        if (tree[i].children) {
+            const found = removeNodeFromTree(tree[i].children, nodeId);
+            if (found) return true;
+        }
+    }
+    return false;
+}
+
+function findNodeById(tree, nodeId) {
+    for (const node of tree) {
+        if (node.id === nodeId) return node;
+        if (node.children) {
+            const found = findNodeById(node.children, nodeId);
+            if (found) return found;
+        }
+    }
+    return null;
+}
     walk(tree, list);
 }
 
