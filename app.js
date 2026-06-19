@@ -265,6 +265,19 @@ async function handleLogout() {
     location.reload();
 }
 
+function sanitizeLinksArray(arr) {
+    if (!Array.isArray(arr)) return [];
+    return arr
+        .map(item => {
+            if (typeof item === 'string') return item.trim();
+            if (item && typeof item === 'object' && typeof item.url === 'string') {
+                return item.url.trim();
+            }
+            return null;
+        })
+        .filter(item => typeof item === 'string' && item.length > 0);
+}
+
 async function loadApp(user) {
     const userBadge = document.getElementById('user-badge');
     if (userBadge) userBadge.innerText = user.email;
@@ -279,9 +292,9 @@ async function loadApp(user) {
         if (data) {
             userData = {
                 feed_tree: data.feed_tree || [],
-                favorited_links: data.favorited_links || [],
-                summary_links: data.summary_links || [],
-                read_links: data.read_links || [],
+                favorited_links: sanitizeLinksArray(data.favorited_links),
+                summary_links: sanitizeLinksArray(data.summary_links),
+                read_links: sanitizeLinksArray(data.read_links),
                 duration_cache: data.duration_cache || {}
             };
 
@@ -577,8 +590,18 @@ async function updateCloudSettings(payload) {
     if (!currentUser) return;
     try {
         const nowStr = new Date().toISOString();
+        const sanitizedPayload = { ...payload };
+        if (payload.favorited_links) {
+            sanitizedPayload.favorited_links = sanitizeLinksArray(payload.favorited_links);
+        }
+        if (payload.summary_links) {
+            sanitizedPayload.summary_links = sanitizeLinksArray(payload.summary_links);
+        }
+        if (payload.read_links) {
+            sanitizedPayload.read_links = sanitizeLinksArray(payload.read_links);
+        }
         const fullPayload = {
-            ...payload,
+            ...sanitizedPayload,
             updated_at: nowStr
         };
         await db.from('user_settings').update(fullPayload).eq('id', currentUser.id);
