@@ -1620,6 +1620,43 @@ async function getYouTubeTranscript(url) {
 
     if (!videoId) return { status: 'error', message: 'Video-ID konnte nicht extrahiert werden.' };
 
+    const extensionId = 'faeeldkkipajnnbkajhdanhbhilfifah';
+
+    // 1. VERSUCH: Direkte Anfrage an die installierte Chrome Extension (vollkommen unblockiert & sicher)
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        try {
+            const extResponse = await new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error("Timeout bei Verbindung zur Extension")), 1500);
+                chrome.runtime.sendMessage(extensionId, { action: "fetchYoutubeTranscript", videoId: videoId }, (res) => {
+                    clearTimeout(timer);
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(res);
+                    }
+                });
+            });
+
+            if (extResponse && extResponse.status === 'ok' && extResponse.xml) {
+                console.log("Transkript erfolgreich über die Chrome Extension geladen!");
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(extResponse.xml, "text/xml");
+                let textNodes = Array.from(xmlDoc.getElementsByTagName('p'));
+                if (textNodes.length === 0) {
+                    textNodes = Array.from(xmlDoc.getElementsByTagName('text'));
+                }
+                if (textNodes.length > 0) {
+                    const texts = textNodes.map(t => t.textContent.replace(/<[^>]+>/g, ''));
+                    const text = texts.join(' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"').substring(0, 50000);
+                    return { status: 'ok', text: text };
+                }
+            }
+        } catch (err) {
+            console.log("Extension nicht erreichbar oder hat geantwortet mit Fehler. Verwende Fallback-Proxy. Details:", err.message);
+        }
+    }
+
+    // 2. FALLBACK: Über den Supabase-Proxy fetch-feed per InnerTube API
     try {
         const proxyUrl = 'https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed';
         const sessionRes = await db.auth.getSession();
