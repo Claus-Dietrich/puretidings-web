@@ -1837,7 +1837,10 @@ async function openReader(post) {
 
             if (isYouTube) {
                 aiReportContent.innerHTML = '<p><em>Hole Video-Skript (Transkript) und analysiere Video... bitte warten.</em></p>';
-                promptText = "You are an assistant that summarizes YouTube videos. Based on the following video description and transcript, create a short, concise summary in German. List the 3-5 most important key takeaways in bullet points in German. Ignore advertisements or sponsor mentions in the text.\n\n";
+                promptText = "You are an assistant that summarizes YouTube videos. Based on the following video description and transcript (script), generate a response in German that is clearly divided into two distinct sections:\n";
+                promptText += "1. 'Zusammenfassung aus der Videobeschreibung': A concise summary of the video's description text.\n";
+                promptText += "2. 'Zusammenfassung aus dem Video-Skript': A concise summary and 3-5 key takeaways in bullet points based on the transcript (script) of the video.\n";
+                promptText += "Ignore advertisements or sponsor mentions in the text. Format the headers clearly in Markdown. If the transcript could not be loaded, summarize based on the description only and state so.\n\n";
                 promptText += `### Video Title: ${post.title}\n`;
                 promptText += `URL: ${post.link}\n\n`;
 
