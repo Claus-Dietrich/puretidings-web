@@ -109,6 +109,7 @@ function handleSearch(query) {
         const text = row.innerText.toLowerCase();
         row.style.display = text.includes(q) ? 'flex' : 'none';
     });
+    filterSidebarFeeds();
 }
 
 function toggleUI(isLoggedIn) {
@@ -483,8 +484,21 @@ async function showView(view) {
         let allPosts = results.flat();
         
         if (view === 'all') {
-            allPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-            renderPostsList(allPosts, "All Posts");
+            let filteredPosts = [...allPosts];
+            
+            // Apply date filtering
+            const { start, end } = getWebSummaryFilters();
+            filteredPosts = filteredPosts.filter(post => {
+                if (!post.pubDate) return true;
+                const postDate = new Date(post.pubDate);
+                if (isNaN(postDate.getTime())) return true;
+                if (start && postDate < start) return false;
+                if (end && postDate > end) return false;
+                return true;
+            });
+            
+            filteredPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            renderPostsList(filteredPosts, "All Posts");
         } else if (view === 'favorites') {
             let favPosts = allPosts.filter(post => userData.favorited_links.includes(post.link));
             
@@ -781,6 +795,78 @@ function showWebCopyStatus(message, type) {
     setTimeout(() => { copyStatus.textContent = ""; }, 3000);
 }
 
+function filterSidebarFeeds() {
+    const isFilteredView = (currentViewMode === 'all' || currentViewMode === 'favorites' || currentViewMode === 'summary');
+    const feedRows = document.querySelectorAll('.sidebar-item-row');
+    const folderContainers = document.querySelectorAll('.folder-children');
+
+    if (!isFilteredView) {
+        // Blende alle Feeds und Ordner wieder ein
+        feedRows.forEach(row => {
+            row.style.display = 'flex';
+            row.style.opacity = '1';
+        });
+        folderContainers.forEach(container => {
+            container.style.display = 'block';
+        });
+        return;
+    }
+
+    // Finde alle aktiven Feed-URLs aus dem posts-container
+    const postsContainer = document.getElementById('posts-container');
+    const activeFeedUrls = new Set();
+    
+    if (postsContainer) {
+        const visibleRows = postsContainer.querySelectorAll('.post-row');
+        visibleRows.forEach(row => {
+            if (row.style.display !== 'none' && row.postData && row.postData.feedUrl) {
+                activeFeedUrls.add(row.postData.feedUrl);
+            }
+        });
+    }
+
+    // Filter die Feeds
+    feedRows.forEach(row => {
+        const isFolder = row.querySelector('.folder-toggle');
+        if (isFolder) return; // Ordner behandeln wir separat
+
+        const idAttr = row.id || '';
+        if (idAttr.startsWith('sidebar-feed-')) {
+            const matchingFeed = getAllFeeds().find(f => `sidebar-feed-${getFeedId(f.url)}` === idAttr);
+            if (matchingFeed) {
+                const hasMatches = activeFeedUrls.has(matchingFeed.url);
+                if (hasMatches) {
+                    row.style.display = 'flex';
+                    row.style.opacity = '1';
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+        }
+    });
+
+    // Filtere die Ordner von innen nach außen
+    const folderRows = Array.from(feedRows).filter(row => row.querySelector('.folder-toggle'));
+    
+    folderRows.reverse().forEach(row => {
+        const nextContainer = row.nextElementSibling;
+        if (nextContainer && nextContainer.classList.contains('folder-children')) {
+            const visibleChildren = Array.from(nextContainer.children).filter(child => {
+                if (child.classList.contains('folder-children')) return false;
+                return child.style.display !== 'none';
+            });
+
+            if (visibleChildren.length > 0) {
+                row.style.display = 'flex';
+                nextContainer.style.display = 'block';
+            } else {
+                row.style.display = 'none';
+                nextContainer.style.display = 'none';
+            }
+        }
+    });
+}
+
 function getRelativeTime(dateStr) {
     if (!dateStr) return '';
     const then = new Date(dateStr);
@@ -834,9 +920,9 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
     const container = document.getElementById('posts-container');
     if (!container) return;
 
-    const isSummaryOrFavorites = (currentViewMode === 'summary' || currentViewMode === 'favorites');
+    const isToolbarView = (currentViewMode === 'summary' || currentViewMode === 'favorites' || currentViewMode === 'all');
 
-    if (isSummaryOrFavorites) {
+    if (isToolbarView) {
         let toolbarHtml = `
             <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>${headerTitle}</span>
@@ -879,7 +965,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     <button id="web-full-view-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
                     </button>
-                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
+                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; ${currentViewMode === 'all' ? 'display:none;' : ''}">
                         ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : 'Liste leeren 🗑'}
                     </button>
                 </div>
@@ -960,7 +1046,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         if (!posts || posts.length === 0) {
             const noPostsDiv = document.createElement('div');
             noPostsDiv.style.cssText = "padding:40px; text-align:center; color:#888;";
-            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : "Keine Artikel in der Zusammenfassungsliste.";
+            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : (currentViewMode === 'all' ? "Keine Artikel vorhanden." : "Keine Artikel in der Zusammenfassungsliste.");
             container.appendChild(noPostsDiv);
             return;
         }
@@ -1017,7 +1103,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 </div>
 
                 <!-- Inline full report view -->
-                <div class="report-inline-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
+                <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
                     <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
                     ${desc || ''}
                 </div>
@@ -1055,6 +1141,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
 
         container.appendChild(row);
     });
+    filterSidebarFeeds();
 }
 
 async function markFeedAsUnread(feedUrl) {
