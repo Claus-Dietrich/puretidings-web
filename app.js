@@ -88,6 +88,27 @@ async function init() {
     document.getElementById('login-btn').onclick = handleLogin;
     document.getElementById('logout-btn').onclick = handleLogout;
     
+    // Theme Switcher Event Handling
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) {
+        // Set initial icon based on actual applied class
+        const isDark = document.body.classList.contains('dark-mode');
+        themeToggleBtn.innerText = isDark ? '🌙' : '☀️';
+        
+        themeToggleBtn.onclick = () => {
+            const currentlyDark = document.body.classList.contains('dark-mode');
+            if (currentlyDark) {
+                document.body.classList.remove('dark-mode');
+                localStorage.setItem('darkMode', 'false');
+                themeToggleBtn.innerText = '☀️';
+            } else {
+                document.body.classList.add('dark-mode');
+                localStorage.setItem('darkMode', 'true');
+                themeToggleBtn.innerText = '🌙';
+            }
+        };
+    }
+    
     // Settings Events
     const settingsBtn = document.getElementById('settings-btn');
     const settingsOverlay = document.getElementById('settings-overlay');

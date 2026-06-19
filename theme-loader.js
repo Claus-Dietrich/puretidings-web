@@ -4,18 +4,25 @@
 
 (async () => {
   try {
-    // Use chrome.storage.sync to get the saved preference.
-    const { darkMode = false } = await chrome.storage.sync.get('darkMode');
+    let isDark = true; // Default to dark mode
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+      const data = await chrome.storage.sync.get('darkMode');
+      if (data.darkMode !== undefined) {
+        isDark = data.darkMode;
+      }
+    } else {
+      const localPref = localStorage.getItem('darkMode');
+      if (localPref !== null) {
+        isDark = localPref === 'true';
+      }
+    }
     
-    // If dark mode is enabled, add the class to the document's body or documentElement.
-    if (darkMode) {
+    if (isDark) {
       if (document.body) {
         document.body.classList.add('dark-mode');
       } else {
-        // Fallback to documentElement (<html>) if body isn't ready yet.
         document.documentElement.classList.add('dark-mode');
-        
-        // Also apply to body once it's available to satisfy any 'body.dark-mode' CSS selectors.
         const observer = new MutationObserver((mutations, obs) => {
           if (document.body) {
             document.body.classList.add('dark-mode');
@@ -26,8 +33,6 @@
       }
     }
   } catch (e) {
-    // This might fail in contexts where the chrome.storage API is not available.
-    // We can fail silently as the default theme will simply be applied.
     console.warn('Could not apply theme preference:', e);
   }
 })();
