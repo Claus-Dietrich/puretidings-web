@@ -1618,7 +1618,7 @@ async function getYouTubeTranscript(url) {
         videoId = url.split('youtube.com/shorts/')[1].split('?')[0];
     }
 
-    if (!videoId) return null;
+    if (!videoId) return { status: 'error', message: 'Video-ID konnte nicht extrahiert werden.' };
 
     try {
         const proxyUrl = 'https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed';
@@ -1635,19 +1635,19 @@ async function getYouTubeTranscript(url) {
             body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` })
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) return { status: 'error', message: `Fehler beim Laden der YouTube-Seite über den Proxy (Status ${response.status}).` };
         const html = await response.text();
 
         const regex = /ytInitialPlayerResponse\s*=\s*({.+?});/;
         const match = html.match(regex);
-        if (!match) return null;
+        if (!match) return { status: 'not_found', message: 'Für dieses Video existiert kein Skript (keine Untertitel auf YouTube vorhanden).' };
 
         const playerResponse = JSON.parse(match[1]);
         const tracks = playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-        if (!tracks || tracks.length === 0) return null;
+        if (!tracks || tracks.length === 0) return { status: 'not_found', message: 'Für dieses Video existiert kein Skript (keine Untertitel auf YouTube vorhanden).' };
 
         let track = tracks.find(t => t.languageCode === 'de') || tracks.find(t => t.languageCode === 'en') || tracks[0];
-        if (!track || !track.baseUrl) return null;
+        if (!track || !track.baseUrl) return { status: 'not_found', message: 'Für dieses Video existiert kein Skript (keine auslesbare Untertitel-Spur gefunden).' };
 
         const tResponse = await fetch(proxyUrl, {
             method: 'POST',
@@ -1658,7 +1658,7 @@ async function getYouTubeTranscript(url) {
             body: JSON.stringify({ url: track.baseUrl })
         });
 
-        if (!tResponse.ok) return null;
+        if (!tResponse.ok) return { status: 'error', message: 'Skript existiert auf YouTube, konnte aber nicht ausgelesen werden.' };
         const xmlText = await tResponse.text();
 
         const parser = new DOMParser();
@@ -1670,12 +1670,15 @@ async function getYouTubeTranscript(url) {
 
         if (textNodes.length > 0) {
             const texts = textNodes.map(t => t.textContent.replace(/<[^>]+>/g, ''));
-            return texts.join(' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"').substring(0, 50000);
+            const text = texts.join(' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"').substring(0, 50000);
+            return { status: 'ok', text: text };
+        } else {
+            return { status: 'error', message: 'Skript existiert auf YouTube, das Format konnte aber nicht ausgelesen werden.' };
         }
     } catch (e) {
         console.error("Fehler beim Abrufen des YouTube-Transkripts über Proxy:", e);
+        return { status: 'error', message: `Fehler beim Auslesen des Skripts: ${e.message}` };
     }
-    return null;
 }
 
 async function openReader(post) {
@@ -1837,26 +1840,28 @@ async function openReader(post) {
 
             if (isYouTube) {
                 aiReportContent.innerHTML = '<p><em>Hole Video-Skript (Transkript) und analysiere Video... bitte warten.</em></p>';
-                promptText = "You are an assistant that summarizes YouTube videos. Based on the following video description and transcript (script), generate a response in German that is clearly divided into two distinct sections:\n";
-                promptText += "1. 'Zusammenfassung aus der Videobeschreibung': A concise summary of the video's description text.\n";
-                promptText += "2. 'Zusammenfassung aus dem Video-Skript': A concise summary and 3-5 key takeaways in bullet points based on the transcript (script) of the video.\n";
-                promptText += "Ignore advertisements or sponsor mentions in the text. Format the headers clearly in Markdown. If the transcript could not be loaded, summarize based on the description only and state so.\n\n";
+                promptText = "You are an assistant that summarizes YouTube videos. Generate a response in German that is clearly divided into two distinct sections using these exact Markdown headings:\n\n";
+                promptText += "### 📝 Zusammenfassung aus der Videobeschreibung\n[Provide a concise summary of the video's description text here]\n\n";
+                promptText += "### 🎥 Zusammenfassung aus dem Video-Skript\n[Provide a concise summary and 3-5 key takeaways in bullet points based on the transcript (script) of the video here]\n\n";
+                promptText += "If both description and transcript are provided, you MUST show both sections. If the transcript could not be loaded, still display both headers but under the script header write: 'Kein Video-Skript (Transkript) verfügbar. Zusammenfassung basiert nur auf der Beschreibung.' Ignore advertisements or sponsor mentions in the text.\n\n";
                 promptText += `### Video Title: ${post.title}\n`;
                 promptText += `URL: ${post.link}\n\n`;
 
                 const description = (post.desc || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 10000);
-                let transcriptText = "";
+                let transcriptResult = null;
                 try {
-                    transcriptText = await getYouTubeTranscript(post.link);
+                    transcriptResult = await getYouTubeTranscript(post.link);
                 } catch (e) {
                     console.error("Transkript-Fehler in AI-Summary:", e);
+                    transcriptResult = { status: 'error', message: `Fehler beim Auslesen des Skripts: ${e.message}` };
                 }
 
                 contentText = `[Video Description / Beschreibung des Videos]:\n${description}\n\n`;
-                if (transcriptText) {
-                    contentText += `[Video Script / Transkript]:\n${transcriptText}\n\n`;
+                if (transcriptResult && transcriptResult.status === 'ok') {
+                    contentText += `[Video Script / Transkript]:\n${transcriptResult.text}\n\n`;
                 } else {
-                    contentText += `(Note: Video transcript could not be loaded. Summarizing based on description only.)\n\n`;
+                    const failMsg = transcriptResult ? transcriptResult.message : 'Skript konnte nicht geladen werden.';
+                    contentText += `(Note: Video transcript is not available because: ${failMsg}. Summarizing based on description only. Please write under the video script header the exact reason: "${failMsg}")\n\n`;
                 }
             } else {
                 promptText = "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.\n\n";
