@@ -5,7 +5,14 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 let db;
 let currentUser = null;
 let currentFeedUrl = null;
-let currentViewMode = 'feed'; // 'feed', 'all', 'favorites'
+let currentViewMode = 'feed'; // 'feed', 'all', 'favorites', 'summary'
+let summarySubMode = 'list'; // 'list' or 'report'
+let summaryDateFilterVal = 'all';
+let filterDateFromVal = '';
+let filterTimeFromVal = '';
+let filterDateToVal = '';
+let filterTimeToVal = '';
+let exportFormatVal = 'txt';
 const globalPostsCache = {}; // Cache for fetched feed posts
 
 let userData = {
@@ -97,7 +104,7 @@ async function init() {
 
 function handleSearch(query) {
     const q = query.toLowerCase().trim();
-    const rows = document.querySelectorAll('.post-row');
+    const rows = document.querySelectorAll('.post-row, .post-item');
     rows.forEach(row => {
         const text = row.innerText.toLowerCase();
         row.style.display = text.includes(q) ? 'flex' : 'none';
@@ -501,7 +508,19 @@ async function showView(view) {
 
             renderPostsList(favPosts, "Favorites");
         } else if (view === 'summary') {
-            const sumPosts = allPosts.filter(post => userData.summary_links.includes(post.link));
+            let sumPosts = allPosts.filter(post => userData.summary_links.includes(post.link));
+            
+            // Apply date filtering
+            const { start, end } = getWebSummaryFilters();
+            sumPosts = sumPosts.filter(post => {
+                if (!post.pubDate) return true; // Keep items with no date (like manually added archived links)
+                const postDate = new Date(post.pubDate);
+                if (isNaN(postDate.getTime())) return true;
+                if (start && postDate < start) return false;
+                if (end && postDate > end) return false;
+                return true;
+            });
+            
             sumPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
             
             // Add archived summary items that are no longer in XML feeds
@@ -588,6 +607,204 @@ async function calculateAllUnreadCounts() {
 
 // --- UTILS ---
 
+function decodeHTML(str) {
+    if (!str) return '';
+    const txt = document.createElement('textarea');
+    txt.innerHTML = str;
+    return txt.value;
+}
+
+function escapeHTML(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+    );
+}
+
+function getWebSummaryFilters() {
+    const preset = summaryDateFilterVal;
+    const now = new Date();
+    let start = null;
+    let end = null;
+
+    if (preset === 'today') {
+        start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+    } else if (preset === '7days') {
+        start = new Date(now);
+        start.setDate(now.getDate() - 7);
+        start.setHours(0, 0, 0, 0);
+    } else if (preset === '30days') {
+        start = new Date(now);
+        start.setDate(now.getDate() - 30);
+        start.setHours(0, 0, 0, 0);
+    } else if (preset === 'custom') {
+        if (filterDateFromVal) {
+            start = new Date(filterDateFromVal + (filterTimeFromVal ? 'T' + filterTimeFromVal : 'T00:00'));
+        }
+        if (filterDateToVal) {
+            end = new Date(filterDateToVal + (filterTimeToVal ? 'T' + filterTimeToVal : 'T23:59:59'));
+        }
+    }
+    return { start, end };
+}
+
+function getCurrentlyFilteredWebPosts() {
+    const container = document.getElementById('posts-container');
+    if (!container) return [];
+    
+    const items = container.querySelectorAll('.post-row, .post-item');
+    const filteredPosts = [];
+    
+    items.forEach(item => {
+        if (item.style.display === 'none') return;
+        if (item.postData) {
+            filteredPosts.push(item.postData);
+        }
+    });
+    
+    return filteredPosts;
+}
+
+function generateWebSummaryContent(posts, format, subMode) {
+    let content = "";
+    const nowStr = new Date().toLocaleString();
+    const isReport = subMode === 'report';
+    
+    let pageName = "Content Summary";
+    if (currentViewMode === 'all') pageName = "All Posts";
+    else if (currentViewMode === 'favorites') pageName = "Favorite Posts";
+    else if (currentViewMode === 'summary') pageName = "Summary Cart";
+    
+    if (format === 'txt') {
+        content = `PURETIDINGS - ${pageName.toUpperCase()} (${isReport ? "FULL REPORT" : "LIST"})\n`;
+        content += "Generated on: " + nowStr + "\n";
+        content += "======================================\n\n";
+        posts.forEach((post, index) => {
+            content += `${index + 1}. ${post.title}${post.feedName ? ` [Source: ${post.feedName}]` : ""}\n`;
+            content += `   Date: ${post.pubDate ? new Date(post.pubDate).toLocaleString() : "Unknown"}\n`;
+            content += `   Link: ${post.link}\n`;
+            
+            if (isReport) {
+                const sourceText = post.desc || '';
+                if (sourceText) {
+                    const cleanDesc = sourceText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    content += `   Content: ${cleanDesc.substring(0, 2000)}${cleanDesc.length > 2000 ? '...' : ''}\n`;
+                }
+            }
+            content += `\n--------------------------------------\n\n`;
+        });
+    } else if (format === 'markdown') {
+        content = `# PureTidings - ${pageName} (${isReport ? "Full Report" : "List"})\n\n`;
+        content += `*Generated on: ${nowStr}*\n\n---\n\n`;
+        posts.forEach((post, index) => {
+            content += `## ${index + 1}. [${post.title}](${post.link})\n`;
+            content += `**Source:** ${post.feedName || "Unknown"} | **Date:** ${post.pubDate ? new Date(post.pubDate).toLocaleString() : "Unknown"}  \n\n`;
+            
+            if (isReport) {
+                const sourceText = post.desc || '';
+                if (sourceText) {
+                    const cleanDesc = sourceText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    content += `${cleanDesc}\n\n`;
+                }
+            }
+            content += `---\n\n`;
+        });
+    } else if (format === 'html') {
+        content = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PureTidings Summary</title><style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background-color: #f9f9f9; color: #333; }
+            .reader-container { max-width: 700px; margin: 20px auto; padding: 20px 40px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            h1 { font-size: 2.2em; font-weight: 700; line-height: 1.2; margin: 0 0 10px 0; }
+            h2 { font-size: 1.8em; font-weight: 700; line-height: 1.2; margin: 0 0 5px 0; }
+            h2 a { color: #333; }
+            h2 a:hover { color: #0066cc; }
+            .report-header { text-align: center; margin-bottom: 40px; }
+            .report-header p { color: #888; font-size: 0.9em; margin: 5px 0; }
+            article { margin-bottom: 60px; }
+            .meta { font-size: 0.9em; color: #888; margin-top: 10px; margin-bottom: 20px; }
+            a { color: #0066cc; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+            hr { border: 0; border-top: 1px solid #ddd; margin: 20px 0; }
+            .desc { font-size: 1.1em; line-height: 1.7; word-wrap: break-word; word-break: break-word; }
+            .desc img, .desc figure { max-width: 100% !important; height: auto !important; margin: 20px 0; border-radius: 4px; }
+            .featured-img { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 15px; display: block; }
+        </style></head><body><div class="reader-container">`;
+        content += `<div class="report-header"><h1>PureTidings - ${pageName} (${isReport ? "Full Report" : "List"})</h1>`;
+        content += `<p>Generated on: ${nowStr}</p></div>`;
+        posts.forEach((post, index) => {
+            content += `<article>`;
+            content += `<h2>${index + 1}. <a href="${post.link}" target="_blank">${escapeHTML(decodeHTML(post.title))}</a></h2>`;
+            content += `<div class="meta"><strong>Source:</strong> ${escapeHTML(decodeHTML(post.feedName || "Unknown"))} &nbsp;|&nbsp; <strong>Date:</strong> ${post.pubDate ? new Date(post.pubDate).toLocaleString() : "Unknown"} &nbsp;|&nbsp; <a href="${post.link}" target="_blank">Original Link</a></div>`;
+            
+            if (isReport) {
+                content += `<hr>`;
+                if (post.thumbnail) {
+                    content += `<img src="${post.thumbnail}" class="featured-img" alt="Featured Image">`;
+                }
+                
+                if (post.link && (post.link.includes('youtube.com/watch') || post.link.includes('youtube.com/shorts/'))) {
+                    let videoInfoHtml = `<p><strong>YouTube Video:</strong> <a href="${post.link}" target="_blank">${escapeHTML(decodeHTML(post.title || post.link))}</a></p>`;
+                    content += videoInfoHtml;
+                    if (post.desc) {
+                        content += `<div class="desc">${post.desc}</div>`;
+                    }
+                } else if (post.desc) {
+                    content += `<div class="desc">${post.desc}</div>`;
+                }
+            }
+            content += `</article>`;
+        });
+        content += `</div></body></html>`;
+    }
+    return content;
+}
+
+function downloadSummaryLinks() {
+    const posts = getCurrentlyFilteredWebPosts();
+    if (posts.length === 0) {
+        alert("Deine Zusammenfassungsliste ist leer oder es entsprechen keine Artikel den Filtern.");
+        return;
+    }
+    
+    const format = exportFormatVal;
+    const content = generateWebSummaryContent(posts, format, summarySubMode);
+    const mimeType = format === 'html' ? 'text/html' : (format === 'markdown' ? 'text/markdown' : 'text/plain');
+    const extension = format === 'html' ? 'html' : (format === 'markdown' ? 'md' : 'txt');
+
+    const now = new Date();
+    const datePart = now.toISOString().split('T')[0];
+    const timePart = now.getHours().toString().padStart(2, '0') + '-' + now.getMinutes().toString().padStart(2, '0');
+    const defaultName = `puretidings-summary-${datePart}_${timePart}.${extension}`;
+    let fileName = prompt("Name für den Bericht eingeben:", defaultName);
+    
+    if (fileName === null) return;
+    if (fileName.trim() === "") fileName = defaultName;
+    
+    const finalName = fileName.toLowerCase().endsWith(`.${extension}`) ? fileName : `${fileName}.${extension}`;
+    
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = finalName;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function showWebCopyStatus(message, type) {
+    const copyStatus = document.getElementById('web-copy-status');
+    if (!copyStatus) return;
+    copyStatus.textContent = message;
+    copyStatus.style.color = type === 'error' ? 'red' : 'green';
+    setTimeout(() => { copyStatus.textContent = ""; }, 3000);
+}
+
 function getRelativeTime(dateStr) {
     if (!dateStr) return '';
     const then = new Date(dateStr);
@@ -641,25 +858,94 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
     const container = document.getElementById('posts-container');
     if (!container) return;
 
+    const isSummaryOrFavorites = (currentViewMode === 'summary' || currentViewMode === 'favorites');
+
     if (currentViewMode === 'summary') {
         let toolbarHtml = `
             <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>${headerTitle}</span>
             </div>
-            <div class="summary-toolbar" style="padding:15px; background:#1e1e1e; border-bottom:1px solid #333; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                <button class="action-btn" id="web-copy-summary" title="Links in die Zwischenablage kopieren" style="width:auto; padding:5px 15px; font-size:12px; height:auto;">Kopieren 📋</button>
-                <button class="action-btn" id="web-clear-summary" title="Zusammenfassungsliste leeren" style="width:auto; padding:5px 15px; font-size:12px; height:auto; background:#d93025; border-color:#d93025;">Liste leeren 🗑</button>
+            <div id="summary-toolbar" style="margin:15px; border:1px solid var(--border-color, #333);">
+                <div class="summary-toolbar-section">
+                    <select id="web-summary-date-filter">
+                        <option value="all" ${summaryDateFilterVal === 'all' ? 'selected' : ''}>Alle Daten</option>
+                        <option value="today" ${summaryDateFilterVal === 'today' ? 'selected' : ''}>Heute</option>
+                        <option value="7days" ${summaryDateFilterVal === '7days' ? 'selected' : ''}>Letzte 7 Tage</option>
+                        <option value="30days" ${summaryDateFilterVal === '30days' ? 'selected' : ''}>Letzte 30 Tage</option>
+                        <option value="custom" ${summaryDateFilterVal === 'custom' ? 'selected' : ''}>Benutzerdefiniert...</option>
+                    </select>
+                    <div id="web-custom-range-container" class="${summaryDateFilterVal === 'custom' ? '' : 'hidden'}">
+                        <input type="date" id="web-filter-date-from" value="${filterDateFromVal}">
+                        <input type="time" id="web-filter-time-from" value="${filterTimeFromVal}">
+                        <span class="range-separator">bis</span>
+                        <input type="date" id="web-filter-date-to" value="${filterDateToVal}">
+                        <input type="time" id="web-filter-time-to" value="${filterTimeToVal}">
+                    </div>
+                </div>
                 
-                <div style="border-left:1px solid #333; height:20px; margin:0 5px;"></div>
+                <div class="summary-toolbar-section">
+                    <select id="web-export-format">
+                        <option value="txt" ${exportFormatVal === 'txt' ? 'selected' : ''}>TXT</option>
+                        <option value="markdown" ${exportFormatVal === 'markdown' ? 'selected' : ''}>Markdown</option>
+                        <option value="html" ${exportFormatVal === 'html' ? 'selected' : ''}>HTML</option>
+                    </select>
+                    <button id="web-copy-summary" class="secondary-btn">Kopieren</button>
+                    <button id="web-download-summary" class="secondary-btn">Speichern</button>
+                </div>
                 
-                <input type="password" id="web-gemini-key" placeholder="Gemini API Key" style="background:#2c2c2c; border:1px solid #444; color:white; padding:5px 10px; border-radius:4px; font-size:12px; width:180px;" />
-                <button class="action-btn" id="web-ai-report" title="KI-Zusammenfassung generieren" style="width:auto; padding:5px 15px; font-size:12px; height:auto; background:#ff9800; border-color:#ff9800;">Zusammenfassen 🤖</button>
+                <div class="summary-toolbar-section">
+                    <input type="password" id="web-gemini-key" placeholder="Gemini API Key" style="background:#2c2c2c; border:1px solid #444; color:white; padding:6px 12px; border-radius:4px; font-size:12px; width:140px;" />
+                    <button id="web-ai-report" class="secondary-btn">Zusammenfassen 🤖</button>
+                    <button id="web-full-view-summary" class="secondary-btn">
+                        ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
+                    </button>
+                    <button id="web-clear-summary" class="delete-btn">Liste leeren 🗑</button>
+                </div>
+                <span id="web-copy-status" class="status-message-inline"></span>
             </div>
             <div id="summary-ai-output" style="display:none; padding:15px 15px 0 15px;"></div>
         `;
         
         container.innerHTML = toolbarHtml;
         
+        // Setup toolbar listeners
+        const dateFilter = document.getElementById('web-summary-date-filter');
+        const customRange = document.getElementById('web-custom-range-container');
+        
+        dateFilter.onchange = (e) => {
+            summaryDateFilterVal = e.target.value;
+            if (summaryDateFilterVal === 'custom') {
+                customRange.classList.remove('hidden');
+            } else {
+                customRange.classList.add('hidden');
+            }
+            showView('summary');
+        };
+        
+        const dateFrom = document.getElementById('web-filter-date-from');
+        const timeFrom = document.getElementById('web-filter-time-from');
+        const dateTo = document.getElementById('web-filter-date-to');
+        const timeTo = document.getElementById('web-filter-time-to');
+        
+        [dateFrom, timeFrom, dateTo, timeTo].forEach(el => {
+            if (el) {
+                el.onchange = () => {
+                    filterDateFromVal = dateFrom.value;
+                    filterTimeFromVal = timeFrom.value;
+                    filterDateToVal = dateTo.value;
+                    filterTimeToVal = timeTo.value;
+                    showView('summary');
+                };
+            }
+        });
+        
+        const exportFormatSel = document.getElementById('web-export-format');
+        if (exportFormatSel) {
+            exportFormatSel.onchange = (e) => {
+                exportFormatVal = e.target.value;
+            };
+        }
+
         const keyInput = document.getElementById('web-gemini-key');
         if (keyInput) {
             keyInput.value = localStorage.getItem('gemini_api_key') || '';
@@ -669,8 +955,25 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         }
         
         document.getElementById('web-copy-summary').onclick = copySummaryLinks;
+        document.getElementById('web-download-summary').onclick = downloadSummaryLinks;
         document.getElementById('web-clear-summary').onclick = clearSummaryList;
         document.getElementById('web-ai-report').onclick = generateAiSummary;
+        
+        const fullViewBtn = document.getElementById('web-full-view-summary');
+        if (fullViewBtn) {
+            fullViewBtn.onclick = () => {
+                summarySubMode = (summarySubMode === 'list') ? 'report' : 'list';
+                fullViewBtn.innerText = (summarySubMode === 'list') ? 'Report-Ansicht' : 'Listen-Ansicht';
+                
+                document.querySelectorAll('.report-inline-description').forEach(el => {
+                    el.style.display = (summarySubMode === 'report') ? 'block' : 'none';
+                });
+                
+                document.querySelectorAll('.summary-item-description').forEach(el => {
+                    el.style.display = (summarySubMode === 'list') ? 'block' : 'none';
+                });
+            };
+        }
         
         if (!posts || posts.length === 0) {
             const noPostsDiv = document.createElement('div');
@@ -706,54 +1009,148 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
 
     posts.forEach(post => {
         const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
-        const row = document.createElement('div'); 
-        row.className = 'post-row';
-        row.dataset.link = link;
         const isRead = userData.read_links.includes(link);
         const isFav = userData.favorited_links.includes(link);
         const isSum = userData.summary_links && userData.summary_links.includes(link);
-        if (isRead) row.style.opacity = '0.5';
-        
-        row.innerHTML = `
-            <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
-            </a>
-            <div class="post-info">
-                <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
-                    ${title}
-                </a>
-                <div class="post-meta">
-                    <span>${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</span>
-                    <span style="margin-left:auto; color:#555;">(${durationStr})</span>
-                </div>
-            </div>
-            <div class="post-actions" style="display:flex; gap:5px;">
-                <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-                <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
-                <button class="action-btn reader-btn" title="Reader">👓</button>
-                <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
-                <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
-            </div>
-        `;
-        
-        row.querySelector('.fav-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            toggleFavorite(link, row.querySelector('.fav-btn'));
-        };
-        row.querySelector('.sum-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            toggleSummary(link, row.querySelector('.sum-btn'));
-        };
-        row.querySelector('.reader-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            openReader({title, link, desc, thumbnail});
-        };
-        row.querySelector('.unread-btn').onclick = (e) => {
-            e.preventDefault(); e.stopPropagation();
-            markAsUnread(link, row);
-        };
 
-        container.appendChild(row);
+        if (isSummaryOrFavorites) {
+            // Render as .post-item matching Chrome Extension style
+            const item = document.createElement('div');
+            item.className = 'post-item';
+            item.dataset.link = link;
+            item.postData = post; // Attach post data for copy/save logic
+            
+            if (isRead) {
+                item.classList.add('read');
+            }
+
+            // Thumbnail
+            let imgHtml = '';
+            if (thumbnail) {
+                imgHtml = `<img src="${thumbnail}" class="post-thumbnail" onerror="this.style.display='none';">`;
+            }
+
+            // Actions Wrapper
+            let actionsHtml = `
+                <button class="read-mode-btn" title="In Reader-Modus öffnen">👓</button>
+                <button class="favorite-btn ${isFav ? 'favorited' : ''}" title="${isFav ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}">
+                    ${isFav ? '★' : '☆'}
+                </button>
+                <button class="summary-btn ${isSum ? 'active' : ''}" title="${isSum ? 'Aus Zusammenfassung entfernen' : 'Zur Zusammenfassung hinzufügen'}">
+                    📋
+                </button>
+                <button class="mark-unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'inline-block' : 'none'}">↩</button>
+            `;
+
+            item.innerHTML = `
+                ${imgHtml}
+                <div class="post-content-wrapper">
+                    <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none;">
+                        ${title}
+                    </a>
+                    
+                    <!-- Legacy 300 char snippet for summary cart in list mode -->
+                    <div class="summary-item-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'list') ? 'block' : 'none'}; font-size: 14px; color: var(--text-color); opacity: 0.8; margin-bottom: 8px; line-height: 1.4;">
+                        ${desc ? desc.replace(/<[^>]+>/g, ' ').substring(0, 300) + '...' : ''}
+                    </div>
+
+                    <!-- Inline full report view -->
+                    <div class="report-inline-description" style="display: ${summarySubMode === 'report' ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6;">
+                        <hr style="border:0; border-top:1px solid var(--border-color, #333); margin-bottom:15px;">
+                        ${desc || ''}
+                    </div>
+
+                    <div class="post-meta">
+                        <p class="post-date">${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</p>
+                        <div class="post-actions">
+                            ${actionsHtml}
+                            <a href="${link}" target="_blank" class="action-btn" title="Original öffnen" style="text-decoration:none; width:auto; height:auto; background:none; border:none; font-size:18px; margin-left:5px;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Event Listeners
+            item.querySelector('.post-title').onclick = (e) => {
+                e.preventDefault();
+                markAsRead(link);
+                item.classList.add('flipping-out');
+                setTimeout(() => {
+                    window.open(link, '_blank');
+                    setTimeout(() => item.classList.remove('flipping-out'), 1000);
+                }, 500);
+            };
+
+            item.querySelector('.favorite-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                toggleFavorite(link, item.querySelector('.favorite-btn'));
+            };
+
+            item.querySelector('.summary-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                toggleSummary(link, item.querySelector('.summary-btn'));
+            };
+
+            item.querySelector('.read-mode-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                openReader({title, link, desc, thumbnail});
+            };
+
+            item.querySelector('.mark-unread-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                markAsUnread(link, item);
+            };
+
+            container.appendChild(item);
+        } else {
+            // Render as .post-row (default layout for normal feeds)
+            const row = document.createElement('div'); 
+            row.className = 'post-row';
+            row.dataset.link = link;
+            row.postData = post; // Attach post data for search
+            if (isRead) row.style.opacity = '0.5';
+            
+            row.innerHTML = `
+                <a href="${link}" target="_blank" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                    <div class="post-thumbnail" style="${thumbnail ? `background-image:url('${thumbnail}')` : ''}; background-size:cover; background-position:center;">${!thumbnail ? '📰' : ''}</div>
+                </a>
+                <div class="post-info">
+                    <a href="${link}" target="_blank" class="post-title" style="${isRead ? 'font-weight:normal' : 'font-weight:600'}; text-decoration:none; color:inherit;" onclick="markAsRead('${link}'); event.stopPropagation();">
+                        ${title}
+                    </a>
+                    <div class="post-meta">
+                        <span>${getRelativeTime(pubDate)}${feedName ? ` • ${feedName}` : ''}</span>
+                        <span style="margin-left:auto; color:#555;">(${durationStr})</span>
+                    </div>
+                </div>
+                <div class="post-actions" style="display:flex; gap:5px;">
+                    <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
+                    <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
+                    <button class="action-btn reader-btn" title="Reader">👓</button>
+                    <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
+                    <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
+                </div>
+            `;
+            
+            row.querySelector('.fav-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                toggleFavorite(link, row.querySelector('.fav-btn'));
+            };
+            row.querySelector('.sum-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                toggleSummary(link, row.querySelector('.sum-btn'));
+            };
+            row.querySelector('.reader-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                openReader({title, link, desc, thumbnail});
+            };
+            row.querySelector('.unread-btn').onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                markAsUnread(link, row);
+            };
+
+            container.appendChild(row);
+        }
     });
 }
 
@@ -815,8 +1212,15 @@ async function markFeedAsRead(feedUrl) {
 async function markAsUnread(link, row) {
     userData.read_links = userData.read_links.filter(l => l !== link);
     row.style.opacity = '1';
-    row.querySelector('.post-title').style.fontWeight = '600';
-    row.querySelector('.unread-btn').style.display = 'none';
+    const title = row.querySelector('.post-title');
+    if (title) title.style.fontWeight = '600';
+    
+    const unreadBtn = row.querySelector('.unread-btn, .mark-unread-btn');
+    if (unreadBtn) unreadBtn.style.display = 'none';
+
+    if (row.classList.contains('post-item')) {
+        row.classList.remove('read');
+    }
 
     if (currentFeedUrl) {
         const countEl = document.querySelector(`#sidebar-feed-${safeId(currentFeedUrl)} .unread-count`);
@@ -836,14 +1240,25 @@ async function markAsRead(link) {
     if (!userData.read_links.includes(link)) {
         userData.read_links.push(link);
         
-        const rows = document.querySelectorAll('.post-row');
+        const rows = document.querySelectorAll('.post-row, .post-item');
         rows.forEach(row => {
             if (row.dataset.link === link) {
                 row.style.opacity = '0.5';
                 const title = row.querySelector('.post-title');
                 if (title) title.style.fontWeight = 'normal';
-                const unreadBtn = row.querySelector('.unread-btn');
-                if (unreadBtn) unreadBtn.style.display = 'flex';
+                
+                const unreadBtn = row.querySelector('.unread-btn, .mark-unread-btn');
+                if (unreadBtn) {
+                    if (row.classList.contains('post-item')) {
+                        unreadBtn.style.display = 'inline-block';
+                    } else {
+                        unreadBtn.style.display = 'flex';
+                    }
+                }
+                
+                if (row.classList.contains('post-item')) {
+                    row.classList.add('read');
+                }
             }
         });
 
@@ -867,13 +1282,16 @@ async function markAsRead(link) {
 
 async function toggleFavorite(link, btn) {
     const isFav = userData.favorited_links.includes(link);
+    const starBtn = btn;
     if (isFav) {
         userData.favorited_links = userData.favorited_links.filter(l => l !== link);
-        btn.innerText = '☆';
-        btn.style.setProperty('color', 'white', 'important');
+        
+        starBtn.innerText = '☆';
+        starBtn.classList.remove('favorited');
+        starBtn.style.setProperty('color', 'white', 'important');
         
         if (currentViewMode === 'favorites') {
-            const row = btn.closest('.post-row');
+            const row = starBtn.closest('.post-row, .post-item');
             if (row) {
                 row.style.transition = 'opacity 0.3s, max-height 0.3s';
                 row.style.opacity = '0';
@@ -882,8 +1300,10 @@ async function toggleFavorite(link, btn) {
         }
     } else {
         userData.favorited_links.push(link);
-        btn.innerText = '★';
-        btn.style.setProperty('color', 'gold', 'important');
+        
+        starBtn.innerText = '★';
+        starBtn.classList.add('favorited');
+        starBtn.style.setProperty('color', 'gold', 'important');
     }
 
     try {
@@ -896,12 +1316,15 @@ async function toggleFavorite(link, btn) {
 async function toggleSummary(link, btn) {
     if (!userData.summary_links) userData.summary_links = [];
     const isSum = userData.summary_links.includes(link);
+    const sumBtn = btn;
     if (isSum) {
         userData.summary_links = userData.summary_links.filter(l => l !== link);
-        btn.style.setProperty('filter', 'grayscale(1)', 'important');
+        
+        sumBtn.classList.remove('active');
+        sumBtn.style.setProperty('filter', 'grayscale(1)', 'important');
         
         if (currentViewMode === 'summary') {
-            const row = btn.closest('.post-row');
+            const row = sumBtn.closest('.post-row, .post-item');
             if (row) {
                 row.style.transition = 'opacity 0.3s, max-height 0.3s';
                 row.style.opacity = '0';
@@ -910,7 +1333,9 @@ async function toggleSummary(link, btn) {
         }
     } else {
         userData.summary_links.push(link);
-        btn.style.setProperty('filter', 'sepia(1) saturate(5) hue-rotate(90deg)', 'important');
+        
+        sumBtn.classList.add('active');
+        sumBtn.style.setProperty('filter', 'sepia(1) saturate(5) hue-rotate(90deg)', 'important');
     }
 
     try {
@@ -963,22 +1388,9 @@ async function generateAiSummary() {
         return;
     }
     
-    const rows = document.querySelectorAll('.post-row');
-    const postsToSummarize = [];
-    rows.forEach(row => {
-        const titleEl = row.querySelector('.post-title');
-        const link = row.dataset.link;
-        if (titleEl && link) {
-            postsToSummarize.push({
-                title: titleEl.innerText.trim(),
-                link: link,
-                description: row.querySelector('.post-meta')?.innerText || ''
-            });
-        }
-    });
-    
+    const postsToSummarize = getCurrentlyFilteredWebPosts();
     if (postsToSummarize.length === 0) {
-        alert("Deine Zusammenfassungsliste ist leer.");
+        alert("Deine Zusammenfassungsliste ist leer oder es entsprechen keine Artikel den Filtern.");
         return;
     }
     
@@ -996,7 +1408,8 @@ async function generateAiSummary() {
         postsToSummarize.forEach((post, index) => {
             promptText += `### Article ${index + 1}: ${post.title}\n`;
             promptText += `Link: ${post.link}\n`;
-            promptText += `Content info: ${post.description.substring(0, 1000)}\n\n`;
+            const cleanDesc = (post.desc || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 1000);
+            promptText += `Content info: ${cleanDesc}\n\n`;
         });
         
         const modelsToTry = await getAvailableGeminiModels(geminiApiKey);
@@ -1056,26 +1469,21 @@ async function generateAiSummary() {
 }
 
 async function copySummaryLinks() {
-    const rows = document.querySelectorAll('.post-row');
-    const links = [];
-    rows.forEach(row => {
-        const link = row.dataset.link;
-        const titleEl = row.querySelector('.post-title');
-        if (link && titleEl) {
-            links.push(`- [${titleEl.innerText.trim()}](${link})`);
-        }
-    });
-    
-    if (links.length === 0) {
-        alert("Deine Zusammenfassungsliste ist leer.");
+    const posts = getCurrentlyFilteredWebPosts();
+    if (posts.length === 0) {
+        alert("Deine Zusammenfassungsliste ist leer oder es entsprechen keine Artikel den Filtern.");
         return;
     }
     
+    const format = exportFormatVal;
+    const content = generateWebSummaryContent(posts, format, summarySubMode);
+    
     try {
-        await navigator.clipboard.writeText(links.join('\n'));
-        alert("Links als Markdown-Liste kopiert!");
-    } catch(e) {
-        console.error("Fehler beim Kopieren:", e);
+        await navigator.clipboard.writeText(content);
+        showWebCopyStatus(`Als ${format.toUpperCase()} kopiert!`, 'success');
+    } catch (err) {
+        console.error('Kopieren fehlgeschlagen: ', err);
+        showWebCopyStatus("Kopieren fehlgeschlagen.", 'error');
     }
 }
 
@@ -1085,7 +1493,7 @@ async function clearSummaryList() {
     userData.summary_links = [];
     const container = document.getElementById('posts-container');
     
-    const rows = container.querySelectorAll('.post-row');
+    const rows = container.querySelectorAll('.post-row, .post-item');
     rows.forEach(row => {
         row.style.transition = 'opacity 0.3s, max-height 0.3s';
         row.style.opacity = '0';
