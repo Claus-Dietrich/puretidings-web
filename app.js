@@ -223,6 +223,21 @@ async function loadApp(user) {
             }
         }
         
+        // Sync session email with the Chrome Extension (if installed)
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            const extensionId = 'faeeldkkipajnnbkajhdanhbhilfifah';
+            chrome.runtime.sendMessage(extensionId, {
+                action: "syncSession",
+                email: user.email
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.log("Extension not detected or syncSession not handled.");
+                } else {
+                    console.log("Session synced with Chrome Extension successfully:", response);
+                }
+            });
+        }
+        
         renderSidebar(userData.feed_tree);
         checkProStatus(data || {});
         showView('all');
