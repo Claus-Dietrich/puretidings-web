@@ -94,10 +94,14 @@ async function init() {
     const settingsClose = document.getElementById('settings-close');
     const settingsSave = document.getElementById('settings-save-btn');
     const settingsGeminiKey = document.getElementById('settings-gemini-key');
+    const settingsAiPrompt = document.getElementById('settings-ai-prompt');
+    const settingsYtPrompt = document.getElementById('settings-yt-prompt');
 
     if (settingsBtn && settingsOverlay) {
         settingsBtn.onclick = () => {
             settingsGeminiKey.value = localStorage.getItem('gemini_api_key') || '';
+            settingsAiPrompt.value = localStorage.getItem('gemini_ai_prompt') || '';
+            settingsYtPrompt.value = localStorage.getItem('gemini_yt_prompt') || '';
             settingsOverlay.style.display = 'flex';
         };
     }
@@ -107,10 +111,28 @@ async function init() {
         };
     }
     if (settingsSave && settingsOverlay) {
-        settingsSave.onclick = () => {
-            localStorage.setItem('gemini_api_key', settingsGeminiKey.value.trim());
+        settingsSave.onclick = async () => {
+            const apiKey = settingsGeminiKey.value.trim();
+            const aiPrompt = settingsAiPrompt.value.trim();
+            const ytPrompt = settingsYtPrompt.value.trim();
+
+            localStorage.setItem('gemini_api_key', apiKey);
+            localStorage.setItem('gemini_ai_prompt', aiPrompt);
+            localStorage.setItem('gemini_yt_prompt', ytPrompt);
+
             settingsOverlay.style.display = 'none';
-            alert("Einstellungen gespeichert!");
+            
+            try {
+                await db.from('user_settings').update({
+                    gemini_api_key: apiKey,
+                    gemini_ai_prompt: aiPrompt,
+                    gemini_yt_prompt: ytPrompt
+                }).eq('id', currentUser.id);
+                alert("Einstellungen lokal und in der Cloud gespeichert!");
+            } catch (e) {
+                console.error("Cloud-Speicherungsfehler:", e);
+                alert("Einstellungen lokal gespeichert, aber Cloud-Speicherung fehlgeschlagen: " + e.message);
+            }
         };
     }
 
@@ -188,6 +210,17 @@ async function loadApp(user) {
                 read_links: data.read_links || [],
                 duration_cache: data.duration_cache || {}
             };
+
+            // Gemini API Key und Prompts in localStorage laden (falls in DB vorhanden)
+            if (data.gemini_api_key !== undefined && data.gemini_api_key !== null) {
+                localStorage.setItem('gemini_api_key', data.gemini_api_key);
+            }
+            if (data.gemini_ai_prompt !== undefined && data.gemini_ai_prompt !== null) {
+                localStorage.setItem('gemini_ai_prompt', data.gemini_ai_prompt);
+            }
+            if (data.gemini_yt_prompt !== undefined && data.gemini_yt_prompt !== null) {
+                localStorage.setItem('gemini_yt_prompt', data.gemini_yt_prompt);
+            }
         }
         
         renderSidebar(userData.feed_tree);
@@ -1892,12 +1925,19 @@ async function openReader(post) {
             let promptText = "";
             let contentText = "";
 
+            const customAiPrompt = localStorage.getItem('gemini_ai_prompt') || '';
+            const customYtPrompt = localStorage.getItem('gemini_yt_prompt') || '';
+
             if (isYouTube) {
                 aiReportContent.innerHTML = '<p><em>Hole Video-Skript (Transkript) und analysiere Video... bitte warten.</em></p>';
-                promptText = "You are an assistant that summarizes YouTube videos. Generate a response in German that is clearly divided into two distinct sections using these exact Markdown headings:\n\n";
-                promptText += "### 📝 Zusammenfassung aus der Videobeschreibung\n[Provide a concise summary of the video's description text here]\n\n";
-                promptText += "### 🎥 Zusammenfassung aus dem Video-Skript\n[Provide a concise summary and 3-5 key takeaways in bullet points based on the transcript (script) of the video here]\n\n";
-                promptText += "If both description and transcript are provided, you MUST show both sections. If the transcript could not be loaded, still display both headers but under the script header write: 'Kein Video-Skript (Transkript) verfügbar. Zusammenfassung basiert nur auf der Beschreibung.' Ignore advertisements or sponsor mentions in the text.\n\n";
+                if (customYtPrompt && customYtPrompt.trim() !== '') {
+                    promptText = customYtPrompt.trim() + "\n\n";
+                } else {
+                    promptText = "You are an assistant that summarizes YouTube videos. Generate a response in German that is clearly divided into two distinct sections using these exact Markdown headings:\n\n";
+                    promptText += "### 📝 Zusammenfassung aus der Videobeschreibung\n[Provide a concise summary of the video's description text here]\n\n";
+                    promptText += "### 🎥 Zusammenfassung aus dem Video-Skript\n[Provide a concise summary and 3-5 key takeaways in bullet points based on the transcript (script) of the video here]\n\n";
+                    promptText += "If both description and transcript are provided, you MUST show both sections. If the transcript is not available, still display both headers but under the script header write: 'Kein Video-Skript (Transkript) verfügbar. Zusammenfassung basiert nur auf der Beschreibung.' Ignore advertisements or sponsor mentions in the text.\n\n";
+                }
                 promptText += `### Video Title: ${post.title}\n`;
                 promptText += `URL: ${post.link}\n\n`;
 
@@ -1918,7 +1958,11 @@ async function openReader(post) {
                     contentText += `(Note: Video transcript is not available because: ${failMsg}. Summarizing based on description only. Please write under the video script header the exact reason: "${failMsg}")\n\n`;
                 }
             } else {
-                promptText = "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.\n\n";
+                if (customAiPrompt && customAiPrompt.trim() !== '') {
+                    promptText = customAiPrompt.trim() + "\n\n";
+                } else {
+                    promptText = "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.\n\n";
+                }
                 promptText += `### Article: ${post.title}\n`;
                 promptText += `URL: ${post.link}\n\n`;
 
