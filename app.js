@@ -486,7 +486,19 @@ async function showView(view) {
             allPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
             renderPostsList(allPosts, "All Posts");
         } else if (view === 'favorites') {
-            const favPosts = allPosts.filter(post => userData.favorited_links.includes(post.link));
+            let favPosts = allPosts.filter(post => userData.favorited_links.includes(post.link));
+            
+            // Apply date filtering
+            const { start, end } = getWebSummaryFilters();
+            favPosts = favPosts.filter(post => {
+                if (!post.pubDate) return true;
+                const postDate = new Date(post.pubDate);
+                if (isNaN(postDate.getTime())) return true;
+                if (start && postDate < start) return false;
+                if (end && postDate > end) return false;
+                return true;
+            });
+            
             favPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
             renderPostsList(favPosts, "Favorites");
         } else if (view === 'summary') {
@@ -824,48 +836,54 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
 
     const isSummaryOrFavorites = (currentViewMode === 'summary' || currentViewMode === 'favorites');
 
-    if (currentViewMode === 'summary') {
+    if (isSummaryOrFavorites) {
         let toolbarHtml = `
             <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>${headerTitle}</span>
             </div>
-            <div id="summary-toolbar" style="margin:15px; border:1px solid var(--border-color, #333);">
-                <div class="summary-toolbar-section">
-                    <select id="web-summary-date-filter">
+            <div id="summary-toolbar" style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 15px; background:#181818; border:1px solid #2d2d2d; border-radius:6px; margin:15px; box-sizing:border-box;">
+                <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px;">
+                    <select id="web-summary-date-filter" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:6px 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none;">
                         <option value="all" ${summaryDateFilterVal === 'all' ? 'selected' : ''}>Alle Daten</option>
                         <option value="today" ${summaryDateFilterVal === 'today' ? 'selected' : ''}>Heute</option>
                         <option value="7days" ${summaryDateFilterVal === '7days' ? 'selected' : ''}>Letzte 7 Tage</option>
                         <option value="30days" ${summaryDateFilterVal === '30days' ? 'selected' : ''}>Letzte 30 Tage</option>
                         <option value="custom" ${summaryDateFilterVal === 'custom' ? 'selected' : ''}>Benutzerdefiniert...</option>
                     </select>
-                    <div id="web-custom-range-container" class="${summaryDateFilterVal === 'custom' ? '' : 'hidden'}">
-                        <input type="date" id="web-filter-date-from" value="${filterDateFromVal}">
-                        <input type="time" id="web-filter-time-from" value="${filterTimeFromVal}">
-                        <span class="range-separator">bis</span>
-                        <input type="date" id="web-filter-date-to" value="${filterDateToVal}">
-                        <input type="time" id="web-filter-time-to" value="${filterTimeToVal}">
+                    <div id="web-custom-range-container" class="${summaryDateFilterVal === 'custom' ? '' : 'hidden'}" style="display:flex; align-items:center; gap:4px;">
+                        <input type="date" id="web-filter-date-from" value="${filterDateFromVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
+                        <input type="time" id="web-filter-time-from" value="${filterTimeFromVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
+                        <span class="range-separator" style="color:#888; font-size:12px; margin:0 4px;">bis</span>
+                        <input type="date" id="web-filter-date-to" value="${filterDateToVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
+                        <input type="time" id="web-filter-time-to" value="${filterTimeToVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
                     </div>
                 </div>
                 
-                <div class="summary-toolbar-section">
-                    <select id="web-export-format">
+                <div style="border-left:1px solid #333; height:20px; margin:0 5px;"></div>
+                
+                <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px;">
+                    <select id="web-export-format" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:6px 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none;">
                         <option value="txt" ${exportFormatVal === 'txt' ? 'selected' : ''}>TXT</option>
                         <option value="markdown" ${exportFormatVal === 'markdown' ? 'selected' : ''}>Markdown</option>
                         <option value="html" ${exportFormatVal === 'html' ? 'selected' : ''}>HTML</option>
                     </select>
-                    <button id="web-copy-summary" class="secondary-btn">Kopieren</button>
-                    <button id="web-download-summary" class="secondary-btn">Speichern</button>
+                    <button id="web-copy-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Kopieren 📋</button>
+                    <button id="web-download-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Speichern 💾</button>
                 </div>
                 
-                <div class="summary-toolbar-section">
-                    <input type="password" id="web-gemini-key" placeholder="Gemini API Key" style="background:#2c2c2c; border:1px solid #444; color:white; padding:6px 12px; border-radius:4px; font-size:12px; width:140px;" />
-                    <button id="web-ai-report" class="secondary-btn">Zusammenfassen 🤖</button>
-                    <button id="web-full-view-summary" class="secondary-btn">
+                <div style="border-left:1px solid #333; height:20px; margin:0 5px;"></div>
+                
+                <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <input type="password" id="web-gemini-key" placeholder="Gemini API Key" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:6px 12px; border-radius:4px; font-size:12px; width:140px; outline:none;" />
+                    <button id="web-ai-report" class="secondary-btn" style="background:#ff9800; border:1px solid #e68a00; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Zusammenfassen 🤖</button>
+                    <button id="web-full-view-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
                     </button>
-                    <button id="web-clear-summary" class="delete-btn">Liste leeren 🗑</button>
+                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
+                        ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : 'Liste leeren 🗑'}
+                    </button>
                 </div>
-                <span id="web-copy-status" class="status-message-inline"></span>
+                <span id="web-copy-status" class="status-message-inline" style="font-size:12px; margin-left:8px;"></span>
             </div>
             <div id="summary-ai-output" style="display:none; padding:15px 15px 0 15px;"></div>
         `;
@@ -883,7 +901,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             } else {
                 customRange.classList.add('hidden');
             }
-            showView('summary');
+            showView(currentViewMode);
         };
         
         const dateFrom = document.getElementById('web-filter-date-from');
@@ -898,7 +916,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                     filterTimeFromVal = timeFrom.value;
                     filterDateToVal = dateTo.value;
                     filterTimeToVal = timeTo.value;
-                    showView('summary');
+                    showView(currentViewMode);
                 };
             }
         });
@@ -920,7 +938,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         
         document.getElementById('web-copy-summary').onclick = copySummaryLinks;
         document.getElementById('web-download-summary').onclick = downloadSummaryLinks;
-        document.getElementById('web-clear-summary').onclick = clearSummaryList;
+        document.getElementById('web-clear-list').onclick = clearCurrentList;
         document.getElementById('web-ai-report').onclick = generateAiSummary;
         
         const fullViewBtn = document.getElementById('web-full-view-summary');
@@ -942,7 +960,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         if (!posts || posts.length === 0) {
             const noPostsDiv = document.createElement('div');
             noPostsDiv.style.cssText = "padding:40px; text-align:center; color:#888;";
-            noPostsDiv.innerText = "Keine Artikel in der Zusammenfassungsliste.";
+            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : "Keine Artikel in der Zusammenfassungsliste.";
             container.appendChild(noPostsDiv);
             return;
         }
@@ -1369,6 +1387,29 @@ async function copySummaryLinks() {
     } catch (err) {
         console.error('Kopieren fehlgeschlagen: ', err);
         showWebCopyStatus("Kopieren fehlgeschlagen.", 'error');
+    }
+}
+
+async function clearCurrentList() {
+    if (currentViewMode === 'favorites') {
+        if (!confirm("Bist du sicher, dass du alle deine Favoriten löschen möchtest?")) return;
+        userData.favorited_links = [];
+        
+        const container = document.getElementById('posts-container');
+        const rows = container.querySelectorAll('.post-row, .post-item');
+        rows.forEach(row => {
+            row.style.transition = 'opacity 0.3s, max-height 0.3s';
+            row.style.opacity = '0';
+        });
+        setTimeout(() => { renderPostsList([], "Favorites"); }, 300);
+        
+        try {
+            await db.from('user_settings')
+                .update({ favorited_links: [] })
+                .eq('id', currentUser.id);
+        } catch(e) { console.error("Sync Favorites Clear Error:", e); }
+    } else {
+        await clearSummaryList();
     }
 }
 
