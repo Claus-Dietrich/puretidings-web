@@ -1306,13 +1306,22 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
     const container = document.getElementById('posts-container');
     if (!container) return;
 
-    const isToolbarView = (currentViewMode === 'summary' || currentViewMode === 'favorites' || currentViewMode === 'all' || currentViewMode === 'feed');
+    const isToolbarView = (currentViewMode === 'summary' || currentViewMode === 'favorites' || currentViewMode === 'all' || currentViewMode === 'feed' || currentViewMode === 'unread');
 
     if (isToolbarView) {
-        let toolbarHtml = `
+        let headerHtml = `
             <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>${headerTitle}</span>
-            </div>
+                <span>${headerTitle}</span>`;
+        if (feedUrl) {
+            headerHtml += `
+                <div style="display:flex; gap:10px;">
+                    <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
+                    <button class="action-btn" title="Ganzen Feed als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
+                </div>`;
+        }
+        headerHtml += `</div>`;
+
+        let toolbarHtml = headerHtml + `
             <div id="summary-toolbar" style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 15px; background:#181818; border:1px solid #2d2d2d; border-radius:6px; margin:15px; box-sizing:border-box;">
                 <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px;">
                     <select id="web-summary-date-filter" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:6px 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none;">
