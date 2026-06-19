@@ -565,16 +565,16 @@ function renderSidebar(tree) {
     
     container.innerHTML = `
         <div style="padding:15px 10px;">
-            <div id="sidebar-nav-all" onclick="showView('all')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#eee; font-size:13px; display:flex; align-items:center; gap:10px; background:#222; border-radius:6px; margin-bottom:5px;"><span>🏠</span> All Posts</div>
-            <div id="sidebar-nav-unread" onclick="showView('unread')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px; margin-bottom:5px;"><span>✉️</span> Unread Posts</div>
-            <div id="sidebar-nav-favorites" onclick="showView('favorites')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px; margin-bottom:5px;"><span>⭐</span> Favorites</div>
-            <div id="sidebar-nav-summary" onclick="showView('summary')" class="sidebar-item" style="padding:8px 10px; cursor:pointer; color:#aaa; font-size:13px; display:flex; align-items:center; gap:10px; border-radius:6px;"><span>📋</span> Summary List</div>
+            <div id="sidebar-nav-all" onclick="showView('all')" class="sidebar-item"><span>🏠</span> All Posts</div>
+            <div id="sidebar-nav-unread" onclick="showView('unread')" class="sidebar-item"><span>✉️</span> Unread Posts</div>
+            <div id="sidebar-nav-favorites" onclick="showView('favorites')" class="sidebar-item"><span>⭐</span> Favorites</div>
+            <div id="sidebar-nav-summary" onclick="showView('summary')" class="sidebar-item"><span>📋</span> Summary List</div>
         </div>
-        <h3 id="sidebar-feeds-header" style="padding:10px 20px; font-size:11px; color:#555; text-transform:uppercase; margin:10px 0 5px 0; display:flex; justify-content:space-between; align-items:center;">
+        <h3 id="sidebar-feeds-header">
             <span>My Feeds</span>
             <div style="display:flex; gap:10px; text-transform:none;">
-                <span id="add-feed-btn" title="Feed hinzufügen" style="cursor:pointer; color:#ff9800; font-weight:bold; font-size:12px;">+ Feed</span>
-                <span id="add-folder-btn" title="Ordner hinzufügen" style="cursor:pointer; color:#ff9800; font-weight:bold; font-size:12px;">+ Ordner</span>
+                <span id="add-feed-btn" title="Feed hinzufügen">+ Feed</span>
+                <span id="add-folder-btn" title="Ordner hinzufügen">+ Ordner</span>
             </div>
         </h3>
         <div id="feed-list-items" style="padding-bottom: 20px;"></div>
@@ -632,7 +632,6 @@ function renderSidebar(tree) {
             li.style.padding = `6px 15px 6px ${20 + (level * 15)}px`;
             li.style.cursor = 'pointer';
             li.style.fontSize = '13px';
-            li.style.color = '#ccc';
             li.style.display = 'flex';
             li.style.alignItems = 'center';
             li.className = 'sidebar-item-row';
@@ -652,7 +651,7 @@ function renderSidebar(tree) {
                 li.classList.add('folder-header');
                 li.innerHTML = `
                     <span class="folder-toggle" draggable="false" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> 
-                    <span draggable="false" style="font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#888;">${n.name.toUpperCase()}</span>
+                    <span class="folder-title" draggable="false" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name.toUpperCase()}</span>
                     <span class="edit-actions" draggable="false" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
                         <span class="edit-btn" draggable="false" title="Umbenennen" style="opacity:0.6; cursor:pointer;">✏️</span>
                         <span class="delete-btn" draggable="false" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
@@ -695,7 +694,7 @@ function renderSidebar(tree) {
                 const favicon = `https://www.google.com/s2/favicons?sz=32&domain=${new URL(n.url).hostname}`;
                 li.innerHTML = `
                     <img src="${favicon}" draggable="false" style="width:16px; height:16px; margin-right:10px; border-radius:2px; opacity:0.8;" onerror="this.src='128.png'"> 
-                    <span draggable="false" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span>
+                    <span class="feed-title-span" draggable="false" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span>
                     <span class="unread-count" draggable="false" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>
                     <span class="edit-actions" draggable="false" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
                         <span class="edit-btn" draggable="false" title="Bearbeiten" style="opacity:0.6; cursor:pointer;">✏️</span>
@@ -1115,30 +1114,22 @@ async function showView(view) {
 
     updateSidebarTreeForUnread();
 
-    // Reset background and color for top items and feed items
-    document.querySelectorAll('.sidebar-item-row').forEach(el => el.style.background = 'transparent');
+    // Reset active class for top items and active background for feed rows
+    document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.sidebar-item-row').forEach(el => {
+        el.classList.remove('active');
+        el.style.background = ''; // Clear legacy inline styling
+    });
     
     const allBtn = document.getElementById('sidebar-nav-all');
     const unreadBtn = document.getElementById('sidebar-nav-unread');
     const favBtn = document.getElementById('sidebar-nav-favorites');
     const sumBtn = document.getElementById('sidebar-nav-summary');
     
-    if (allBtn) {
-        allBtn.style.background = (view === 'all') ? '#2c2c2c' : 'transparent';
-        allBtn.style.color = (view === 'all') ? '#eee' : '#aaa';
-    }
-    if (unreadBtn) {
-        unreadBtn.style.background = (view === 'unread') ? '#2c2c2c' : 'transparent';
-        unreadBtn.style.color = (view === 'unread') ? '#eee' : '#aaa';
-    }
-    if (favBtn) {
-        favBtn.style.background = (view === 'favorites') ? '#2c2c2c' : 'transparent';
-        favBtn.style.color = (view === 'favorites') ? '#eee' : '#aaa';
-    }
-    if (sumBtn) {
-        sumBtn.style.background = (view === 'summary') ? '#2c2c2c' : 'transparent';
-        sumBtn.style.color = (view === 'summary') ? '#eee' : '#aaa';
-    }
+    if (view === 'all' && allBtn) allBtn.classList.add('active');
+    if (view === 'unread' && unreadBtn) unreadBtn.classList.add('active');
+    if (view === 'favorites' && favBtn) favBtn.classList.add('active');
+    if (view === 'summary' && sumBtn) sumBtn.classList.add('active');
     
     const container = document.getElementById('posts-container');
     container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade ${view === 'all' ? 'alle' : (view === 'unread' ? 'ungelesene' : (view === 'favorites' ? 'Favoriten-' : 'Zusammenfassungs-'))} Artikel...</div></div>`;
@@ -1620,16 +1611,13 @@ async function loadFeedPosts(url, feedName = '') {
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade Artikel...</div></div>';
     
     // UI Feedback in Sidebar
-    document.querySelectorAll('.sidebar-item-row').forEach(el => el.style.background = 'transparent');
+    document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.sidebar-item-row').forEach(el => {
+        el.classList.remove('active');
+        el.style.background = ''; // Clear legacy inline style
+    });
     const activeRow = document.getElementById(`sidebar-feed-${safeId(url)}`);
-    if (activeRow) activeRow.style.background = '#2c2c2c';
-
-    const allBtn = document.getElementById('sidebar-nav-all');
-    const favBtn = document.getElementById('sidebar-nav-favorites');
-    const sumBtn = document.getElementById('sidebar-nav-summary');
-    if (allBtn) { allBtn.style.background = 'transparent'; allBtn.style.color = '#aaa'; }
-    if (favBtn) { favBtn.style.background = 'transparent'; favBtn.style.color = '#aaa'; }
-    if (sumBtn) { sumBtn.style.background = 'transparent'; sumBtn.style.color = '#aaa'; }
+    if (activeRow) activeRow.classList.add('active');
 
     try {
         let posts = await getFeedPosts(url, feedName);
@@ -1686,48 +1674,48 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         headerHtml += `</div>`;
 
         let toolbarHtml = headerHtml + `
-            <div id="summary-toolbar" style="display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 15px; background:#181818; border:1px solid #2d2d2d; border-radius:6px; margin:15px; box-sizing:border-box;">
-                <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px;">
-                    <select id="web-summary-date-filter" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:6px 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none;">
+            <div id="summary-toolbar">
+                <div class="summary-toolbar-section">
+                    <select id="web-summary-date-filter">
                         <option value="all" ${summaryDateFilterVal === 'all' ? 'selected' : ''}>Alle Daten</option>
                         <option value="today" ${summaryDateFilterVal === 'today' ? 'selected' : ''}>Heute</option>
                         <option value="7days" ${summaryDateFilterVal === '7days' ? 'selected' : ''}>Letzte 7 Tage</option>
                         <option value="30days" ${summaryDateFilterVal === '30days' ? 'selected' : ''}>Letzte 30 Tage</option>
                         <option value="custom" ${summaryDateFilterVal === 'custom' ? 'selected' : ''}>Benutzerdefiniert...</option>
                     </select>
-                    <div id="web-custom-range-container" class="${summaryDateFilterVal === 'custom' ? '' : 'hidden'}" style="display:flex; align-items:center; gap:4px;">
-                        <input type="date" id="web-filter-date-from" value="${filterDateFromVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
-                        <input type="time" id="web-filter-time-from" value="${filterTimeFromVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
-                        <span class="range-separator" style="color:#888; font-size:12px; margin:0 4px;">bis</span>
-                        <input type="date" id="web-filter-date-to" value="${filterDateToVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
-                        <input type="time" id="web-filter-time-to" value="${filterTimeToVal}" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:5px; border-radius:4px; font-size:12px; outline:none;">
+                    <div id="web-custom-range-container" class="${summaryDateFilterVal === 'custom' ? '' : 'hidden'}">
+                        <input type="date" id="web-filter-date-from" value="${filterDateFromVal}">
+                        <input type="time" id="web-filter-time-from" value="${filterTimeFromVal}">
+                        <span class="range-separator">bis</span>
+                        <input type="date" id="web-filter-date-to" value="${filterDateToVal}">
+                        <input type="time" id="web-filter-time-to" value="${filterTimeToVal}">
                     </div>
                 </div>
                 
-                <div style="border-left:1px solid #333; height:20px; margin:0 5px;"></div>
+                <div style="border-left:1px solid var(--border-color); height:20px; margin:0 5px;"></div>
                 
-                <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px;">
-                    <select id="web-export-format" style="background:#252525; border:1px solid #3c4043; color:#e8eaed; padding:6px 10px; border-radius:4px; font-size:12px; cursor:pointer; outline:none;">
+                <div class="summary-toolbar-section">
+                    <select id="web-export-format">
                         <option value="txt" ${exportFormatVal === 'txt' ? 'selected' : ''}>TXT</option>
                         <option value="markdown" ${exportFormatVal === 'markdown' ? 'selected' : ''}>Markdown</option>
                         <option value="html" ${exportFormatVal === 'html' ? 'selected' : ''}>HTML</option>
                     </select>
-                    <button id="web-copy-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Kopieren 📋</button>
-                    <button id="web-download-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Speichern 💾</button>
+                    <button id="web-copy-summary" class="secondary-btn">Kopieren 📋</button>
+                    <button id="web-download-summary" class="secondary-btn">Speichern 💾</button>
                 </div>
                 
-                <div style="border-left:1px solid #333; height:20px; margin:0 5px;"></div>
+                <div style="border-left:1px solid var(--border-color); height:20px; margin:0 5px;"></div>
                 
-                <div class="summary-toolbar-section" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <button id="web-ai-report" class="secondary-btn" style="background:#ff9800; border:1px solid #e68a00; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">Zusammenfassen 🤖</button>
-                    <button id="web-full-view-summary" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold;">
+                <div class="summary-toolbar-section">
+                    <button id="web-ai-report">Zusammenfassen 🤖</button>
+                    <button id="web-full-view-summary" class="secondary-btn">
                         ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
                     </button>
-                    <button id="web-clear-list" class="delete-btn" style="background:#d93025; border:1px solid #b7271e; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; ${(currentViewMode === 'all' || currentViewMode === 'feed' || currentFeedUrl) ? 'display:none;' : ''}">
+                    <button id="web-clear-list" class="delete-btn" style="${(currentViewMode === 'all' || currentViewMode === 'feed' || currentFeedUrl) ? 'display:none;' : ''}">
                         ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : 'Liste leeren 🗑'}
                     </button>
                 </div>
-                <span id="web-copy-status" class="status-message-inline" style="font-size:12px; margin-left:8px;"></span>
+                <span id="web-copy-status" class="status-message-inline"></span>
             </div>
             <div id="summary-ai-output" style="display:none; padding:15px 15px 0 15px;"></div>
         `;

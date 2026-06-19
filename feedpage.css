@@ -596,8 +596,8 @@ main {
 /* Drag and Drop in Sidebar */
 .sidebar-item-row.dragging {
   opacity: 0.4;
-  background: #333 !important;
-  border: 1px dashed #555;
+  background: var(--active-bg) !important;
+  border: 1px dashed var(--border-color);
 }
 
 .sidebar-item-row.drag-over-top {
@@ -621,7 +621,7 @@ main {
 }
 
 /* Reset settings styling leaking into sidebar folder elements */
-.sidebar-item-row.folder-header {
+#feed-tree-container .sidebar-item-row.folder-header {
   background-color: transparent !important;
   border: none !important;
   border-top: none !important;
@@ -630,4 +630,163 @@ main {
   display: flex !important;
   justify-content: flex-start !important;
   font-size: 13px !important;
+}
+
+/* Sidebar Nav Items Styling */
+.sidebar-item {
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text-color-darker) !important;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  transition: background-color 0.15s, color 0.15s;
+  background-color: transparent;
+}
+.sidebar-item:hover {
+  background-color: var(--hover-bg) !important;
+  color: var(--text-color) !important;
+}
+.sidebar-item.active {
+  background-color: var(--active-bg) !important;
+  color: var(--text-color) !important;
+  font-weight: 600;
+}
+
+/* Sidebar Feed Tree Nodes */
+.sidebar-item-row {
+  color: var(--text-color-darker) !important;
+  background-color: transparent;
+  transition: background-color 0.15s, color 0.15s;
+}
+.sidebar-item-row:hover {
+  background-color: var(--hover-bg) !important;
+  color: var(--text-color) !important;
+}
+.sidebar-item-row.active {
+  background-color: var(--active-bg) !important;
+  color: var(--text-color) !important;
+  font-weight: 600;
+}
+
+#sidebar-feeds-header {
+  padding: 10px 20px;
+  font-size: 11px;
+  color: var(--text-color-darker);
+  text-transform: uppercase;
+  margin: 10px 0 5px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#sidebar-feeds-header span {
+  font-weight: bold;
+}
+#add-feed-btn, #add-folder-btn {
+  cursor: pointer;
+  color: var(--primary-orange, #ff9800);
+  font-weight: bold;
+  font-size: 12px;
+}
+
+#feed-tree-container .folder-title {
+  color: var(--text-color-darker);
+  font-weight: 600;
+  transition: color 0.15s;
+}
+#feed-tree-container .sidebar-item-row:hover .folder-title,
+#feed-tree-container .sidebar-item-row.active .folder-title {
+  color: var(--text-color) !important;
+}
+
+#feed-tree-container .feed-title-span {
+  color: var(--text-color-darker);
+  transition: color 0.15s;
+}
+#feed-tree-container .sidebar-item-row:hover .feed-title-span,
+#feed-tree-container .sidebar-item-row.active .feed-title-span {
+  color: var(--text-color) !important;
+}
+
+/* Summary Toolbar Styling */
+#summary-toolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 15px !important;
+  background-color: var(--header-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  margin: 15px !important;
+  box-sizing: border-box !important;
+}
+
+#summary-toolbar .summary-toolbar-section {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+#summary-toolbar select,
+#summary-toolbar input[type="date"],
+#summary-toolbar input[type="time"] {
+  background-color: var(--input-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--input-color) !important;
+  padding: 6px 10px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  outline: none !important;
+  cursor: pointer !important;
+  font-family: inherit !important;
+}
+
+#summary-toolbar .range-separator {
+  color: var(--text-color-darker) !important;
+  font-size: 12px !important;
+  margin: 0 4px !important;
+}
+
+#summary-toolbar button {
+  padding: 6px 12px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  font-weight: bold !important;
+  font-family: inherit !important;
+  transition: background-color 0.2s, border-color 0.2s;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#summary-toolbar button.secondary-btn {
+  background-color: var(--button-bg-color) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-color) !important;
+}
+#summary-toolbar button.secondary-btn:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+#summary-toolbar button#web-ai-report {
+  background-color: #ff9800 !important;
+  border: 1px solid #e68a00 !important;
+  color: #fff !important;
+}
+#summary-toolbar button#web-ai-report:hover {
+  background-color: #e68a00 !important;
+}
+
+#summary-toolbar button.delete-btn {
+  background-color: #d93025 !important;
+  border: 1px solid #b7271e !important;
+  color: #fff !important;
+}
+#summary-toolbar button.delete-btn:hover {
+  background-color: #b7271e !important;
 }

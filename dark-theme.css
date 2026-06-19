@@ -7,6 +7,7 @@
   --text-color-darker: #a0a0a0;
   --primary-color: #8ab4f8;
   --secondary-color: #2d2e30;
+  --sidebar-bg: #181818;
   --border-color: #3c4043;
   --hover-bg: #383a3d;
   --active-bg: #414347; /* Definiert für aktiven Menüpunkt */
@@ -102,6 +103,13 @@
 .dark-mode .folder-header {
   background-color: var(--secondary-color);
   border: 1px solid var(--border-color);
+}
+
+/* Sidebar folders transparent overrides */
+.dark-mode #feed-tree-container .sidebar-item-row.folder-header {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .dark-mode .post-item:hover,
