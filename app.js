@@ -488,24 +488,6 @@ async function showView(view) {
         } else if (view === 'favorites') {
             const favPosts = allPosts.filter(post => userData.favorited_links.includes(post.link));
             favPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-            
-            // Add archived favorites that are no longer in XML feeds
-            const foundFavLinks = favPosts.map(p => p.link);
-            const missingFavLinks = userData.favorited_links.filter(link => !foundFavLinks.includes(link));
-            
-            missingFavLinks.forEach(link => {
-                favPosts.push({
-                    title: link,
-                    link: link,
-                    desc: "Older favorite. Link is saved, but full text is not in current feed feeds.",
-                    thumbnail: "",
-                    pubDate: "",
-                    durationStr: "Unknown",
-                    feedName: "Archived Favorite",
-                    feedUrl: null
-                });
-            });
-
             renderPostsList(favPosts, "Favorites");
         } else if (view === 'summary') {
             let sumPosts = allPosts.filter(post => userData.summary_links.includes(post.link));
@@ -513,7 +495,7 @@ async function showView(view) {
             // Apply date filtering
             const { start, end } = getWebSummaryFilters();
             sumPosts = sumPosts.filter(post => {
-                if (!post.pubDate) return true; // Keep items with no date (like manually added archived links)
+                if (!post.pubDate) return true;
                 const postDate = new Date(post.pubDate);
                 if (isNaN(postDate.getTime())) return true;
                 if (start && postDate < start) return false;
@@ -522,24 +504,6 @@ async function showView(view) {
             });
             
             sumPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-            
-            // Add archived summary items that are no longer in XML feeds
-            const foundSumLinks = sumPosts.map(p => p.link);
-            const missingSumLinks = userData.summary_links.filter(link => !foundSumLinks.includes(link));
-            
-            missingSumLinks.forEach(link => {
-                sumPosts.push({
-                    title: link,
-                    link: link,
-                    desc: "Older summary item. Link is saved, but full text is not in current feed feeds.",
-                    thumbnail: "",
-                    pubDate: "",
-                    durationStr: "Unknown",
-                    feedName: "Archived Summary Item",
-                    feedUrl: null
-                });
-            });
-
             renderPostsList(sumPosts, "Summary List");
         }
     } catch (e) {
