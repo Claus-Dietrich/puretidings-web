@@ -1626,24 +1626,41 @@ async function getYouTubeTranscript(url) {
         const session = sessionRes.data?.session;
         if (!session) throw new Error("Keine aktive Sitzung");
 
+        const innerTubeUrl = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+        const innerTubePayload = {
+            context: {
+                client: {
+                    clientName: 'ANDROID',
+                    clientVersion: '20.10.38'
+                }
+            },
+            videoId: videoId
+        };
+
         const response = await fetch(proxyUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${session.access_token}`
             },
-            body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` })
+            body: JSON.stringify({
+                url: innerTubeUrl,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14)'
+                },
+                body: innerTubePayload
+            })
         });
 
-        if (!response.ok) return { status: 'error', message: `Fehler beim Laden der YouTube-Seite über den Proxy (Status ${response.status}).` };
-        const html = await response.text();
+        if (!response.ok) return { status: 'error', message: `Fehler beim Laden der YouTube-Daten über den Proxy (Status ${response.status}).` };
+        const data = await response.json();
+        if (data.error) {
+            return { status: 'error', message: `Proxy-Fehler: ${data.error}` };
+        }
 
-        const regex = /ytInitialPlayerResponse\s*=\s*({.+?});/;
-        const match = html.match(regex);
-        if (!match) return { status: 'not_found', message: 'Für dieses Video existiert kein Skript (keine Untertitel auf YouTube vorhanden).' };
-
-        const playerResponse = JSON.parse(match[1]);
-        const tracks = playerResponse.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+        const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
         if (!tracks || tracks.length === 0) return { status: 'not_found', message: 'Für dieses Video existiert kein Skript (keine Untertitel auf YouTube vorhanden).' };
 
         let track = tracks.find(t => t.languageCode === 'de') || tracks.find(t => t.languageCode === 'en') || tracks[0];
