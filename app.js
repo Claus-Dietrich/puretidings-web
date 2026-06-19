@@ -1321,7 +1321,7 @@ function calculateReadingTime(text) {
 
 async function loadFeedPosts(url, feedName = '') {
     // Determine view mode context
-    if (currentViewMode !== 'favorites' && currentViewMode !== 'summary') {
+    if (currentViewMode !== 'favorites' && currentViewMode !== 'summary' && currentViewMode !== 'unread') {
         currentViewMode = 'feed';
     }
     currentFeedUrl = url;
@@ -1349,6 +1349,8 @@ async function loadFeedPosts(url, feedName = '') {
             posts = posts.filter(post => userData.favorited_links.includes(post.link));
         } else if (currentViewMode === 'summary') {
             posts = posts.filter(post => userData.summary_links.includes(post.link));
+        } else if (currentViewMode === 'unread') {
+            posts = posts.filter(post => !userData.read_links || !userData.read_links.includes(post.link));
         }
         
         // Filter by active date filters
