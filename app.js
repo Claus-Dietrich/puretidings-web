@@ -2193,10 +2193,13 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 <span id="web-copy-status" class="status-message-inline"></span>
             </div>
             <!-- Bulk Summary Prompt Editor Section -->
-            <div id="web-ai-prompt-editor-section" style="margin: 10px 15px; padding: 12px; background: #1e1e1e; border: 1px solid var(--border-color, #333); border-radius: 6px;">
+            <div id="web-ai-prompt-editor-section" class="hidden" style="margin: 10px 15px; padding: 12px; background: #1e1e1e; border: 1px solid var(--border-color, #333); border-radius: 6px;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     <label for="web-ai-custom-prompt-val" style="font-size: 12px; font-weight: bold; color: var(--text-color-darker, #aaa);">Prompt für diese Sammel-Zusammenfassung anpassen:</label>
-                    <textarea id="web-ai-custom-prompt-val" rows="2" style="width: 100%; padding: 8px; background: #252525; color: #e8eaed; border: 1px solid #3c4043; border-radius: 6px; font-family: inherit; font-size: 12px; resize: vertical; outline: none; box-sizing: border-box;"></textarea>
+                    <div style="display: flex; gap: 10px; align-items: flex-end;">
+                        <textarea id="web-ai-custom-prompt-val" rows="2" style="flex: 1; padding: 8px; background: #252525; color: #e8eaed; border: 1px solid #3c4043; border-radius: 6px; font-family: inherit; font-size: 12px; resize: vertical; outline: none; box-sizing: border-box;"></textarea>
+                        <button id="web-ai-generate-with-prompt-btn" style="height: 32px; padding: 0 15px; font-weight: bold; background: #3c5c8b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Zusammenfassung starten 🤖</button>
+                    </div>
                 </div>
             </div>
             <div id="summary-ai-output" style="display:none; padding:15px 15px 0 15px;"></div>
@@ -2256,7 +2259,22 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         if (clearListBtn) {
             clearListBtn.onclick = clearCurrentList;
         }
-        document.getElementById('web-ai-report').onclick = generateAiSummary;
+        document.getElementById('web-ai-report').onclick = () => {
+            const editorSection = document.getElementById('web-ai-prompt-editor-section');
+            if (editorSection) {
+                editorSection.classList.remove('hidden');
+            }
+            const outputContainer = document.getElementById('summary-ai-output');
+            if (outputContainer) {
+                outputContainer.innerHTML = '<p style="color: #eee; font-style: italic; margin-top: 15px;">Passe den Prompt bei Bedarf oben an und klicke auf "Zusammenfassung starten 🤖", um fortzufahren.</p>';
+                outputContainer.style.display = 'block';
+            }
+        };
+
+        const webAiGenerateWithPromptBtn = document.getElementById('web-ai-generate-with-prompt-btn');
+        if (webAiGenerateWithPromptBtn) {
+            webAiGenerateWithPromptBtn.onclick = generateAiSummary;
+        }
         
         const webAiCustomPromptVal = document.getElementById('web-ai-custom-prompt-val');
         if (webAiCustomPromptVal) {
@@ -3359,6 +3377,7 @@ async function openReader(post) {
 
     aiSummaryBtn.onclick = async () => {
         aiReportContainer.classList.remove('hidden');
+        aiReportContent.innerHTML = '<p style="color: #eee; font-style: italic;">Passe den Prompt bei Bedarf oben an und klicke auf "Generieren 🤖", um die Zusammenfassung zu starten.</p>';
         
         const customAiPrompt = localStorage.getItem('gemini_ai_prompt') || '';
         const customYtPrompt = localStorage.getItem('gemini_yt_prompt') || '';
@@ -3372,8 +3391,6 @@ async function openReader(post) {
                 ? customAiPrompt.trim()
                 : "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.";
         }
-
-        await runAiSummaryGeneration();
     };
 
     aiGenerateWithPromptBtn.onclick = async () => {
