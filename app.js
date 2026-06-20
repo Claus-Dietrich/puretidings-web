@@ -274,6 +274,24 @@ async function init() {
     document.getElementById('login-btn').onclick = handleLogin;
     document.getElementById('logout-btn').onclick = handleLogout;
     
+    // Mobile Sidebar Toggle
+    const menuToggleBtn = document.getElementById('menu-toggle-btn');
+    const sidebar = document.getElementById('feed-tree-container');
+    const postsContainer = document.getElementById('posts-container');
+    if (menuToggleBtn && sidebar) {
+        menuToggleBtn.onclick = (e) => {
+            e.stopPropagation();
+            sidebar.classList.toggle('active');
+        };
+    }
+    if (postsContainer && sidebar) {
+        postsContainer.onclick = () => {
+            if (sidebar.classList.contains('active')) {
+                sidebar.classList.remove('active');
+            }
+        };
+    }
+    
     // Theme Switcher Event Handling
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     if (themeToggleBtn) {
@@ -1364,6 +1382,11 @@ async function showView(view) {
     localStorage.removeItem('currentFeedUrl');
     localStorage.removeItem('currentFeedName');
 
+    const sidebar = document.getElementById('feed-tree-container');
+    if (sidebar && sidebar.classList.contains('active')) {
+        sidebar.classList.remove('active');
+    }
+
     updateSidebarTreeForUnread();
 
     // Reset active class for top items and active background for feed rows
@@ -1891,6 +1914,11 @@ async function loadFeedPosts(url, feedName = '') {
     localStorage.setItem('currentFeedUrl', url);
     localStorage.setItem('currentFeedName', feedName);
     localStorage.setItem('currentViewMode', currentViewMode);
+
+    const sidebar = document.getElementById('feed-tree-container');
+    if (sidebar && sidebar.classList.contains('active')) {
+        sidebar.classList.remove('active');
+    }
 
     const container = document.getElementById('posts-container');
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade Artikel...</div></div>';

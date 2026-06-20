@@ -56,6 +56,101 @@
         .action-btn { background: var(--button-bg-color); border: 1px solid var(--border-color); color: var(--text-color) !important; width: 34px; height: 34px; border-radius: 4px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
         .action-btn:hover { background: var(--hover-bg); border-color: var(--primary-orange); }
         .feed-header { background: var(--sidebar-bg); padding: 10px 15px; font-size: 12px; font-weight: 700; color: var(--text-color-darker); border-bottom: 1px solid var(--border-color); text-transform: uppercase; letter-spacing: 1px; }
+        /* Mobile-Friendly Adjustments */
+        @media (max-width: 768px) {
+            #menu-toggle-btn {
+                display: block !important;
+            }
+            #feed-tree-container {
+                position: absolute !important;
+                top: 55px;
+                left: -280px;
+                width: 260px !important;
+                height: calc(100vh - 55px) !important;
+                z-index: 1000 !important;
+                transition: left 0.3s ease !important;
+                box-shadow: 4px 0 15px rgba(0,0,0,0.4) !important;
+            }
+            #feed-tree-container.active {
+                left: 0 !important;
+            }
+            #sidebar-resizer {
+                display: none !important;
+            }
+            #web-header {
+                padding: 10px !important;
+                gap: 8px !important;
+            }
+            #web-header strong {
+                font-size: 14px !important;
+            }
+            #user-badge {
+                display: none !important;
+            }
+            #search-input {
+                font-size: 11px !important;
+                padding: 6px 25px 6px 10px !important;
+            }
+            #search-clear-btn {
+                right: 8px !important;
+                font-size: 12px !important;
+            }
+            #theme-toggle-btn, #settings-btn, #logout-btn {
+                padding: 4px 6px !important;
+                font-size: 11px !important;
+            }
+            /* Adjust toolbar in report view for small screens */
+            #summary-toolbar {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 8px !important;
+                padding: 10px !important;
+            }
+            .summary-toolbar-section {
+                width: 100% !important;
+                justify-content: flex-start !important;
+                flex-wrap: wrap !important;
+            }
+            .summary-toolbar-section button, .summary-toolbar-section select {
+                flex: 1 !important;
+                min-width: 80px !important;
+            }
+            /* Adjust reader overlay on mobile */
+            #reader-overlay {
+                padding: 10px !important;
+            }
+            #reader-content {
+                padding: 15px !important;
+            }
+            #reader-toolbar {
+                gap: 4px !important;
+            }
+            #reader-toolbar button, #reader-toolbar select {
+                font-size: 10px !important;
+                padding: 0 6px !important;
+                height: 24px !important;
+            }
+            /* Post row adjustments for mobile */
+            .post-row {
+                padding: 10px !important;
+                gap: 10px !important;
+            }
+            .post-thumbnail {
+                width: 60px !important;
+                height: 45px !important;
+            }
+            .post-title {
+                font-size: 12px !important;
+            }
+            .post-meta {
+                font-size: 10px !important;
+            }
+            .post-actions button, .post-actions a {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 14px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -83,6 +178,7 @@
     <div id="app-container">
         <header id="web-header">
             <div style="display:flex; align-items:center; gap:10px;">
+                <button id="menu-toggle-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color); font-size:18px; padding:4px 8px; border-radius:4px; cursor:pointer; display:none; line-height: 1; outline: none;" title="Menü umschalten">☰</button>
                 <strong>PureTidings</strong>
                 <span id="user-badge" style="font-size:12px; color:var(--text-color-darker);"></span>
             </div>
