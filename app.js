@@ -1095,7 +1095,7 @@ function handleAddFeedPrompt() {
         name: name.trim(),
         url: url.trim(),
         type: 'feed',
-        fetchOgImage: false
+        fetchOgImage: true
     };
 
     if (folderId) {
@@ -1209,9 +1209,27 @@ async function getFeedPosts(url, feedName = '') {
         if (!xml) return [];
 
         const items = xml.querySelectorAll('item, entry');
-        const posts = [];
         
-        items.forEach(item => {
+        // Find if this feed has fetchOgImage enabled
+        let fetchOgImage = false;
+        const findFeedInTree = (nodes, targetUrl) => {
+            for (const node of nodes) {
+                if (node.type === 'feed' && node.url === targetUrl) {
+                    return node;
+                }
+                if (node.type === 'folder' && node.children) {
+                    const found = findFeedInTree(node.children, targetUrl);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        const currentFeed = findFeedInTree(userData.feed_tree || [], url);
+        if (currentFeed && currentFeed.fetchOgImage) {
+            fetchOgImage = true;
+        }
+
+        const posts = await Promise.all(Array.from(items).map(async item => {
             const title = item.querySelector('title')?.textContent || 'Kein Titel';
             let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
             if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
@@ -1232,7 +1250,12 @@ async function getFeedPosts(url, feedName = '') {
             }
             const desc = descText;
             const encoded = encodedText;
-            const pubDate = item.querySelector('pubDate, published, updated, dc\\:date')?.textContent || '';
+            
+            let pubDate = item.querySelector('pubDate, published, updated')?.textContent || '';
+            if (!pubDate) {
+              const dcNodes = item.getElementsByTagName('dc:date');
+              if (dcNodes.length > 0) pubDate = dcNodes[0].textContent;
+            }
             
             let thumbnail = '';
             const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
@@ -1243,10 +1266,13 @@ async function getFeedPosts(url, feedName = '') {
                 const cachedDuration = userData.duration_cache[ytId];
                 durationStr = cachedDuration ? cachedDuration : 'Video';
             } else {
-                let mediaThumbnail = item.querySelector('thumbnail');
-                if (!mediaThumbnail) {
-                  const mtNodes = item.getElementsByTagName('media:thumbnail');
-                  if (mtNodes.length > 0) mediaThumbnail = mtNodes[0];
+                let mediaThumbnail = null;
+                const mtNodes = item.getElementsByTagName('media:thumbnail');
+                if (mtNodes.length > 0) {
+                  mediaThumbnail = mtNodes[0];
+                } else {
+                  const thumbNodes = item.getElementsByTagName('thumbnail');
+                  if (thumbNodes.length > 0) mediaThumbnail = thumbNodes[0];
                 }
                 if (mediaThumbnail && mediaThumbnail.getAttribute('url')) {
                   thumbnail = mediaThumbnail.getAttribute('url');
@@ -1286,10 +1312,49 @@ async function getFeedPosts(url, feedName = '') {
                         }
                     }
                 }
+                
+                // Fallback: Fetch page via Supabase Proxy for og:image
+                if (!thumbnail && link && link !== '#' && fetchOgImage) {
+                    try {
+                        const { data: { session } } = await db.auth.getSession();
+                        const response = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session?.access_token}`
+                            },
+                            body: JSON.stringify({ url: link })
+                        });
+                        if (response.ok) {
+                            const html = await response.text();
+                            const docParser = new DOMParser();
+                            const docHtml = docParser.parseFromString(html, "text/html");
+                            const ogNode = docHtml.querySelector('meta[property="og:image"], meta[name="og:image"], meta[property="twitter:image"], meta[name="twitter:image"], link[rel="image_src"]');
+                            if (ogNode) {
+                                const imgUrl = ogNode.getAttribute('content') || ogNode.getAttribute('href');
+                                if (imgUrl && imgUrl.startsWith('http')) {
+                                    thumbnail = imgUrl;
+                                }
+                            }
+                            
+                            if (!thumbnail) {
+                                const firstImg = docHtml.querySelector('article img, .post-content img, .entry-content img');
+                                if (firstImg && firstImg.getAttribute('src')) {
+                                    const imgUrl = firstImg.getAttribute('src');
+                                    if (imgUrl && imgUrl.startsWith('http') && !imgUrl.includes('1x1') && !imgUrl.includes('tracking')) {
+                                        thumbnail = imgUrl;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (fetchError) {
+                        console.warn(`Could not fetch article page for og:image via proxy at ${link}:`, fetchError);
+                    }
+                }
                 durationStr = `${calculateReadingTime(desc+encoded)} min read`;
             }
 
-            posts.push({
+            return {
                 title,
                 link,
                 desc: desc + encoded,
@@ -1298,8 +1363,8 @@ async function getFeedPosts(url, feedName = '') {
                 durationStr,
                 feedName,
                 feedUrl: url
-            });
-        });
+            };
+        }));
         
         const rules = getWebRules();
         posts.forEach(post => {
