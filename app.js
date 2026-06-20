@@ -1917,7 +1917,7 @@ function createPostRowElement(post, isToolbarView) {
             <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
                 <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
                 <div class="report-content-body">${desc || ''}</div>
-                ${(!desc || desc.replace(/<[^>]+>/g, '').trim().length < 600) ? `
+                ${(!post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) ? `
                     <div style="margin-top: 12px; text-align: left;">
                         <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px;">Vollständigen Text nachladen 👓</button>
                     </div>
@@ -3170,10 +3170,21 @@ async function openReader(post) {
         doc.head.appendChild(base);
 
         const reader = new Readability(doc).parse();
-        if (reader) {
+        if (reader && reader.content) {
             let content = reader.content;
             content = sanitizeReaderContent(content);
             innerContent.innerHTML = `<div style="font-size:16px; line-height:1.7; color:#eee;">${content}</div>`;
+            
+            post.desc = content;
+            post.isFullyLoaded = true;
+
+            const postRow = document.querySelector(`.post-row[data-link="${post.link}"]`);
+            if (postRow) {
+                const contentBody = postRow.querySelector('.report-content-body');
+                if (contentBody) contentBody.innerHTML = content;
+                const loadBtn = postRow.querySelector('.load-full-btn');
+                if (loadBtn && loadBtn.parentNode) loadBtn.parentNode.remove();
+            }
         }
     } catch (e) { innerContent.innerHTML = `<div style="color:red; margin-top:20px;">Fehler beim Laden des Inhalts: ${e.message}</div>`; }
 }
@@ -3217,6 +3228,7 @@ async function loadFullInlineContent(link, btn) {
             const post = allPosts.find(p => p.link === link);
             if (post) {
                 post.desc = content;
+                post.isFullyLoaded = true;
             }
         } else {
             throw new Error("Konnte den Text der Originalseite nicht extrahieren.");
