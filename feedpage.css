@@ -800,3 +800,19 @@ main {
   background-color: rgba(255, 152, 0, 0.1) !important;
   border-left: 4px solid var(--primary-orange) !important;
 }
+
+/* Report View styling and image containment */
+.report-inline-description {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.report-inline-description img {
+  max-width: 100% !important;
+  max-height: 450px !important;
+  height: auto !important;
+  object-fit: contain !important;
+  border-radius: 6px !important;
+  margin: 12px 0 !important;
+  display: block !important;
+}
+

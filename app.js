@@ -1916,7 +1916,12 @@ function createPostRowElement(post, isToolbarView) {
             <!-- Inline full report view -->
             <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
                 <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
-                ${desc || ''}
+                <div class="report-content-body">${desc || ''}</div>
+                ${(!desc || desc.replace(/<[^>]+>/g, '').trim().length < 600) ? `
+                    <div style="margin-top: 12px; text-align: left;">
+                        <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px;">Vollständigen Text nachladen 👓</button>
+                    </div>
+                ` : ''}
             </div>
 
             <div class="post-meta">
@@ -3172,6 +3177,58 @@ async function openReader(post) {
         }
     } catch (e) { innerContent.innerHTML = `<div style="color:red; margin-top:20px;">Fehler beim Laden des Inhalts: ${e.message}</div>`; }
 }
+
+async function loadFullInlineContent(link, btn) {
+    const container = btn.closest('.report-inline-description');
+    const contentBody = container ? container.querySelector('.report-content-body') : null;
+    if (!container || !contentBody) return;
+    
+    btn.innerText = 'Lade...';
+    btn.disabled = true;
+    
+    try {
+        const { data: { session } } = await db.auth.getSession();
+        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`
+            }, 
+            body: JSON.stringify({ url: link }) 
+        });
+        if (!res.ok) throw new Error("HTTP-Fehler " + res.status);
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        
+        const base = doc.createElement('base');
+        base.href = link;
+        doc.head.appendChild(base);
+
+        const reader = new Readability(doc).parse();
+        if (reader && reader.content) {
+            let content = sanitizeReaderContent(reader.content);
+            contentBody.innerHTML = content;
+            
+            // Remove the reload button div since the content is now fully loaded
+            const parentOfBtn = btn.parentNode;
+            if (parentOfBtn) parentOfBtn.remove();
+
+            // Also update the description in local memory cache
+            const post = allPosts.find(p => p.link === link);
+            if (post) {
+                post.desc = content;
+            }
+        } else {
+            throw new Error("Konnte den Text der Originalseite nicht extrahieren.");
+        }
+    } catch(e) {
+        console.error(e);
+        btn.innerText = 'Vollständigen Text nachladen ↻';
+        btn.disabled = false;
+        alert("Der vollständige Artikel konnte nicht geladen werden: " + e.message);
+    }
+}
+window.loadFullInlineContent = loadFullInlineContent;
 
 function generateReaderArticleContent(post, format, isFragment = false) {
     const title = post.title;
