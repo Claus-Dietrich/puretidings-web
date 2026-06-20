@@ -1210,8 +1210,8 @@ async function getFeedPosts(url, feedName = '') {
 
         const items = xml.querySelectorAll('item, entry');
         
-        // Find if this feed has fetchOgImage enabled
-        let fetchOgImage = false;
+        // Find if this feed has fetchOgImage enabled (defaults to true if not explicitly false)
+        let fetchOgImage = true;
         const findFeedInTree = (nodes, targetUrl) => {
             for (const node of nodes) {
                 if (node.type === 'feed' && node.url === targetUrl) {
@@ -1225,8 +1225,8 @@ async function getFeedPosts(url, feedName = '') {
             return null;
         };
         const currentFeed = findFeedInTree(userData.feed_tree || [], url);
-        if (currentFeed && currentFeed.fetchOgImage) {
-            fetchOgImage = true;
+        if (currentFeed && currentFeed.fetchOgImage === false) {
+            fetchOgImage = false;
         }
 
         const posts = await Promise.all(Array.from(items).map(async item => {
