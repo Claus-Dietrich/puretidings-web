@@ -383,13 +383,30 @@ async function init() {
 
     // Search Support
     const searchInput = document.getElementById('search-input');
+    const searchClearBtn = document.getElementById('search-clear-btn');
     if (searchInput) {
         const query = localStorage.getItem('searchQuery') || '';
         searchInput.value = query;
+        if (searchClearBtn) {
+            searchClearBtn.style.display = query ? 'block' : 'none';
+        }
         searchInput.oninput = (e) => {
-            localStorage.setItem('searchQuery', e.target.value);
-            handleSearch(e.target.value);
+            const val = e.target.value;
+            localStorage.setItem('searchQuery', val);
+            if (searchClearBtn) {
+                searchClearBtn.style.display = val ? 'block' : 'none';
+            }
+            handleSearch(val);
         };
+        if (searchClearBtn) {
+            searchClearBtn.onclick = () => {
+                searchInput.value = '';
+                localStorage.setItem('searchQuery', '');
+                searchClearBtn.style.display = 'none';
+                handleSearch('');
+                searchInput.focus();
+            };
+        }
     }
 }
 
@@ -429,6 +446,10 @@ function parseSearchQuery(query) {
 }
 
 function handleSearch(query) {
+    const searchClearBtn = document.getElementById('search-clear-btn');
+    if (searchClearBtn) {
+        searchClearBtn.style.display = query ? 'block' : 'none';
+    }
     const searchConditionGroups = parseSearchQuery(query);
     const rows = document.querySelectorAll('.post-row, .post-item');
     rows.forEach(row => {
@@ -2237,6 +2258,7 @@ async function markFeedAsUnread(feedUrl) {
     let unreadCountAdded = 0;
     
     rows.forEach(row => {
+        if (row.style.display === 'none') return;
         const link = row.dataset.link;
         if (link && userData.read_links.includes(link)) {
             userData.read_links = userData.read_links.filter(l => l !== link);
@@ -2275,6 +2297,7 @@ async function markFeedAsRead(feedUrl) {
     const rows = document.querySelectorAll('.post-row');
     let changed = false;
     rows.forEach(row => {
+        if (row.style.display === 'none') return;
         const link = row.dataset.link;
         if (link && !userData.read_links.includes(link)) {
             userData.read_links.push(link);
