@@ -1317,33 +1317,30 @@ async function getFeedPosts(url, feedName = '') {
                         console.log(`[Web-App] Try fetch page for og:image via proxy: ${link}`);
                         const html = await fetchViaExtensionOrProxy(link);
                         console.log(`[Web-App] Successfully loaded article HTML, length: ${html.length}`);
-                            const docParser = new DOMParser();
-                            const docHtml = docParser.parseFromString(html, "text/html");
-                            const ogNode = docHtml.querySelector('meta[property="og:image"], meta[name="og:image"], meta[property="twitter:image"], meta[name="twitter:image"], link[rel="image_src"]');
-                            if (ogNode) {
-                                const imgUrl = ogNode.getAttribute('content') || ogNode.getAttribute('href');
-                                if (imgUrl && imgUrl.startsWith('http')) {
+                        const docParser = new DOMParser();
+                        const docHtml = docParser.parseFromString(html, "text/html");
+                        const ogNode = docHtml.querySelector('meta[property="og:image"], meta[name="og:image"], meta[property="twitter:image"], meta[name="twitter:image"], link[rel="image_src"]');
+                        if (ogNode) {
+                            const imgUrl = ogNode.getAttribute('content') || ogNode.getAttribute('href');
+                            if (imgUrl && imgUrl.startsWith('http')) {
+                                thumbnail = imgUrl;
+                                console.log(`[Web-App] Found og:image: ${thumbnail}`);
+                            }
+                        }
+                        
+                        if (!thumbnail) {
+                            const firstImg = docHtml.querySelector('article img, .post-content img, .entry-content img');
+                            if (firstImg && firstImg.getAttribute('src')) {
+                                const imgUrl = firstImg.getAttribute('src');
+                                if (imgUrl && imgUrl.startsWith('http') && !imgUrl.includes('1x1') && !imgUrl.includes('tracking')) {
                                     thumbnail = imgUrl;
-                                    console.log(`[Web-App] Found og:image: ${thumbnail}`);
+                                    console.log(`[Web-App] Found first-image fallback: ${thumbnail}`);
                                 }
                             }
-                            
-                            if (!thumbnail) {
-                                const firstImg = docHtml.querySelector('article img, .post-content img, .entry-content img');
-                                if (firstImg && firstImg.getAttribute('src')) {
-                                    const imgUrl = firstImg.getAttribute('src');
-                                    if (imgUrl && imgUrl.startsWith('http') && !imgUrl.includes('1x1') && !imgUrl.includes('tracking')) {
-                                        thumbnail = imgUrl;
-                                        console.log(`[Web-App] Found first-image fallback: ${thumbnail}`);
-                                    }
-                                }
-                            }
-                            
-                            if (!thumbnail) {
-                                console.log(`[Web-App] No og:image or body image found on article page.`);
-                            }
-                        } else {
-                            console.warn(`[Web-App] Proxy fetch failed with status: ${response.status}`);
+                        }
+                        
+                        if (!thumbnail) {
+                            console.log(`[Web-App] No og:image or body image found on article page.`);
                         }
                     } catch (fetchError) {
                         console.error(`[Web-App] Proxy fetch page error at ${link}:`, fetchError);
