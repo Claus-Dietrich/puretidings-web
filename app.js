@@ -2001,15 +2001,12 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
     if (isToolbarView) {
         let headerHtml = `
             <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>${headerTitle}</span>`;
-        if (feedUrl) {
-            headerHtml += `
+                <span>${headerTitle}</span>
                 <div style="display:flex; gap:10px;">
-                    <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
-                    <button class="action-btn" title="Ganzen Feed als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
-                </div>`;
-        }
-        headerHtml += `</div>`;
+                    <button class="action-btn" title="Alle angezeigten Artikel als gelesen markieren" onclick="markFeedAsRead('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
+                    <button class="action-btn" title="Alle angezeigten Artikel als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
+                </div>
+            </div>`;
 
         let toolbarHtml = headerHtml + `
             <div id="summary-toolbar">
@@ -2164,16 +2161,12 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         }
 
         let headerHtml = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>${headerTitle}</span>`;
-        
-        if (feedUrl) {
-            headerHtml += `
+            <span>${headerTitle}</span>
             <div style="display:flex; gap:10px;">
-                <button class="action-btn" title="Ganzen Feed als gelesen markieren" onclick="markFeedAsRead('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
-                <button class="action-btn" title="Ganzen Feed als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
-            </div>`;
-        }
-        headerHtml += `</div>`;
+                <button class="action-btn" title="Alle angezeigten Artikel als gelesen markieren" onclick="markFeedAsRead('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
+                <button class="action-btn" title="Alle angezeigten Artikel als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
+            </div>
+        </div>`;
         container.innerHTML = headerHtml;
     }
 
@@ -2248,19 +2241,27 @@ async function markFeedAsUnread(feedUrl) {
         if (link && userData.read_links.includes(link)) {
             userData.read_links = userData.read_links.filter(l => l !== link);
             row.style.opacity = '1';
-            row.querySelector('.post-title').style.fontWeight = '600';
-            row.querySelector('.unread-btn').style.display = 'none';
+            const title = row.querySelector('.post-title');
+            if (title) title.style.fontWeight = '600';
+            const unreadBtn = row.querySelector('.unread-btn');
+            if (unreadBtn) unreadBtn.style.display = 'none';
             changed = true;
             unreadCountAdded++;
         }
     });
 
     if (changed) {
-        const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
-        if (countEl) {
-            countEl.innerText = unreadCountAdded;
-            countEl.style.setProperty('display', 'inline-block', 'important');
-            countEl.style.backgroundColor = '#4a90e2';
+        if (feedUrl && feedUrl !== 'null' && feedUrl !== '') {
+            const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
+            if (countEl) {
+                const posts = globalPostsCache[feedUrl] || [];
+                const unreadCount = posts.filter(p => !userData.read_links.includes(p.link)).length;
+                countEl.innerText = unreadCount;
+                countEl.style.setProperty('display', 'inline-block', 'important');
+                countEl.style.backgroundColor = '#4a90e2';
+            }
+        } else {
+            calculateAllUnreadCounts();
         }
 
         try {
@@ -2278,15 +2279,21 @@ async function markFeedAsRead(feedUrl) {
         if (link && !userData.read_links.includes(link)) {
             userData.read_links.push(link);
             row.style.opacity = '0.5';
-            row.querySelector('.post-title').style.fontWeight = 'normal';
-            row.querySelector('.unread-btn').style.display = 'flex';
+            const title = row.querySelector('.post-title');
+            if (title) title.style.fontWeight = 'normal';
+            const unreadBtn = row.querySelector('.unread-btn');
+            if (unreadBtn) unreadBtn.style.display = 'flex';
             changed = true;
         }
     });
 
     if (changed) {
-        const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
-        if (countEl) countEl.style.display = 'none';
+        if (feedUrl && feedUrl !== 'null' && feedUrl !== '') {
+            const countEl = document.querySelector(`#sidebar-feed-${safeId(feedUrl)} .unread-count`);
+            if (countEl) countEl.style.display = 'none';
+        } else {
+            calculateAllUnreadCounts();
+        }
 
         try {
             await updateCloudSettings({ read_links: userData.read_links });
