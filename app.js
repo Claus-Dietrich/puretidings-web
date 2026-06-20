@@ -1321,7 +1321,7 @@ async function getFeedPosts(url, feedName = '') {
                 }
                 
                 // Fallback: Fetch page via Supabase Proxy for og:image
-                if (!thumbnail && link && link !== '#' && fetchOgImage) {
+                if (!thumbnail && link && link !== '#') {
                     try {
                         console.log(`[Web-App] Try fetch page for og:image via proxy: ${link}`);
                         const { data: { session } } = await db.auth.getSession();
