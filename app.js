@@ -4,16 +4,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 let db;
 let currentUser = null;
-let currentFeedUrl = null;
-let currentFeedName = '';
-let currentViewMode = 'feed'; // 'feed', 'all', 'favorites', 'summary'
-let summarySubMode = 'list'; // 'list' or 'report'
-let summaryDateFilterVal = 'all';
-let filterDateFromVal = '';
-let filterTimeFromVal = '';
-let filterDateToVal = '';
-let filterTimeToVal = '';
-let exportFormatVal = 'txt';
+let currentFeedUrl = localStorage.getItem('currentFeedUrl') || null;
+let currentFeedName = localStorage.getItem('currentFeedName') || '';
+let currentViewMode = localStorage.getItem('currentViewMode') || 'all'; // 'feed', 'all', 'favorites', 'summary'
+let summarySubMode = localStorage.getItem('summarySubMode') || 'list'; // 'list' or 'report'
+let summaryDateFilterVal = localStorage.getItem('summaryDateFilterVal') || 'all';
+let filterDateFromVal = localStorage.getItem('filterDateFromVal') || '';
+let filterTimeFromVal = localStorage.getItem('filterTimeFromVal') || '';
+let filterDateToVal = localStorage.getItem('filterDateToVal') || '';
+let filterTimeToVal = localStorage.getItem('filterTimeToVal') || '';
+let exportFormatVal = localStorage.getItem('exportFormatVal') || 'txt';
 const globalPostsCache = {}; // Cache for fetched feed posts
 
 let userData = {
@@ -384,7 +384,12 @@ async function init() {
     // Search Support
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
-        searchInput.oninput = (e) => handleSearch(e.target.value);
+        const query = localStorage.getItem('searchQuery') || '';
+        searchInput.value = query;
+        searchInput.oninput = (e) => {
+            localStorage.setItem('searchQuery', e.target.value);
+            handleSearch(e.target.value);
+        };
     }
 }
 
@@ -545,7 +550,20 @@ async function loadApp(user) {
         
         renderSidebar(userData.feed_tree);
         checkProStatus(data || {});
-        showView('all');
+        
+        // Restore stored view mode and active feed (if any)
+        const storedView = localStorage.getItem('currentViewMode') || 'all';
+        if (storedView === 'feed') {
+            const storedUrl = localStorage.getItem('currentFeedUrl');
+            const storedName = localStorage.getItem('currentFeedName');
+            if (storedUrl) {
+                loadFeedPosts(storedUrl, storedName || '');
+            } else {
+                showView('all');
+            }
+        } else {
+            showView(storedView);
+        }
         calculateAllUnreadCounts();
 
     } catch (e) { showErrorOnScreen("Fehler beim Laden der Profildaten: " + e.message); }
@@ -1321,6 +1339,9 @@ async function showView(view) {
     currentViewMode = view;
     currentFeedUrl = null;
     currentFeedName = '';
+    localStorage.setItem('currentViewMode', view);
+    localStorage.removeItem('currentFeedUrl');
+    localStorage.removeItem('currentFeedName');
 
     updateSidebarTreeForUnread();
 
@@ -1443,6 +1464,12 @@ async function showView(view) {
             
             sumPosts.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
             renderPostsList(sumPosts, "Summary List");
+        }
+
+        // Apply active search query in UI (if any)
+        const searchInput = document.getElementById('search-input');
+        if (searchInput && searchInput.value.trim() !== '') {
+            handleSearch(searchInput.value);
         }
     } catch (e) {
         container.innerHTML = `<div style="padding:20px; color:red;">Fehler beim Laden: ${e.message}</div>`;
@@ -1840,6 +1867,9 @@ async function loadFeedPosts(url, feedName = '') {
         currentViewMode = 'feed';
     }
     currentFeedUrl = url;
+    localStorage.setItem('currentFeedUrl', url);
+    localStorage.setItem('currentFeedName', feedName);
+    localStorage.setItem('currentViewMode', currentViewMode);
 
     const container = document.getElementById('posts-container');
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade Artikel...</div></div>';
