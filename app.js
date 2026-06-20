@@ -1231,9 +1231,16 @@ async function getFeedPosts(url, feedName = '') {
 
         const posts = await Promise.all(Array.from(items).map(async item => {
             const title = item.querySelector('title')?.textContent || 'Kein Titel';
-            let link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
-            if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
-                link = item.querySelector('link[rel="alternate"]').getAttribute('href');
+            let link = '#';
+            const linkNodes = item.getElementsByTagName('link');
+            if (linkNodes.length > 0) {
+                link = linkNodes[0].getAttribute('href') || linkNodes[0].textContent || '#';
+            }
+            if (!link || link === '#') {
+                link = item.querySelector('link')?.textContent || item.querySelector('link')?.getAttribute('href') || '#';
+                if ((!link || link === '#') && item.querySelector('link[rel="alternate"]')) {
+                    link = item.querySelector('link[rel="alternate"]').getAttribute('href');
+                }
             }
             const descText = item.querySelector('description, summary, media\\:description')?.textContent || '';
             let encodedText = "";
@@ -1316,6 +1323,7 @@ async function getFeedPosts(url, feedName = '') {
                 // Fallback: Fetch page via Supabase Proxy for og:image
                 if (!thumbnail && link && link !== '#' && fetchOgImage) {
                     try {
+                        console.log(`[Web-App] Try fetch page for og:image via proxy: ${link}`);
                         const { data: { session } } = await db.auth.getSession();
                         const response = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', {
                             method: 'POST',
@@ -1327,6 +1335,7 @@ async function getFeedPosts(url, feedName = '') {
                         });
                         if (response.ok) {
                             const html = await response.text();
+                            console.log(`[Web-App] Successfully loaded article HTML, length: ${html.length}`);
                             const docParser = new DOMParser();
                             const docHtml = docParser.parseFromString(html, "text/html");
                             const ogNode = docHtml.querySelector('meta[property="og:image"], meta[name="og:image"], meta[property="twitter:image"], meta[name="twitter:image"], link[rel="image_src"]');
@@ -1334,6 +1343,7 @@ async function getFeedPosts(url, feedName = '') {
                                 const imgUrl = ogNode.getAttribute('content') || ogNode.getAttribute('href');
                                 if (imgUrl && imgUrl.startsWith('http')) {
                                     thumbnail = imgUrl;
+                                    console.log(`[Web-App] Found og:image: ${thumbnail}`);
                                 }
                             }
                             
@@ -1343,12 +1353,19 @@ async function getFeedPosts(url, feedName = '') {
                                     const imgUrl = firstImg.getAttribute('src');
                                     if (imgUrl && imgUrl.startsWith('http') && !imgUrl.includes('1x1') && !imgUrl.includes('tracking')) {
                                         thumbnail = imgUrl;
+                                        console.log(`[Web-App] Found first-image fallback: ${thumbnail}`);
                                     }
                                 }
                             }
+                            
+                            if (!thumbnail) {
+                                console.log(`[Web-App] No og:image or body image found on article page.`);
+                            }
+                        } else {
+                            console.warn(`[Web-App] Proxy fetch failed with status: ${response.status}`);
                         }
                     } catch (fetchError) {
-                        console.warn(`Could not fetch article page for og:image via proxy at ${link}:`, fetchError);
+                        console.error(`[Web-App] Proxy fetch page error at ${link}:`, fetchError);
                     }
                 }
                 durationStr = `${calculateReadingTime(desc+encoded)} min read`;
@@ -2040,6 +2057,7 @@ async function loadFeedPosts(url, feedName = '') {
 
 function createPostRowElement(post, isToolbarView) {
     const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
+    console.log(`[Web Rendering] Creating row for "${title}", thumbnail: ${thumbnail || 'none'}`);
     const row = document.createElement('div'); 
     const isKeywordMatch = post.matchedRules && post.matchedRules.length > 0;
     row.className = 'post-row' + (isKeywordMatch ? ' keyword-match' : '');
