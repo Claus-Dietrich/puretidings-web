@@ -34,9 +34,10 @@ function getWebRules() {
     }
 }
 
-function saveWebRules(rules) {
+async function saveWebRules(rules) {
     try {
         localStorage.setItem('web_rules', JSON.stringify(rules));
+        await updateCloudSettings({ rules });
     } catch (e) {
         console.error("Error saving rules:", e);
     }
@@ -516,6 +517,9 @@ async function loadApp(user) {
             if (data.gemini_yt_prompt !== undefined && data.gemini_yt_prompt !== null) {
                 localStorage.setItem('gemini_yt_prompt', data.gemini_yt_prompt);
             }
+            if (data.rules !== undefined && data.rules !== null) {
+                localStorage.setItem('web_rules', JSON.stringify(data.rules));
+            }
         }
         
         // Sync session email with the Chrome Extension (if installed)
@@ -964,6 +968,9 @@ async function updateCloudSettings(payload) {
         }
         if (payload.read_links) {
             sanitizedPayload.read_links = sanitizeLinksArray(payload.read_links);
+        }
+        if (payload.rules) {
+            sanitizedPayload.rules = payload.rules;
         }
         const fullPayload = {
             ...sanitizedPayload,
