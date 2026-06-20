@@ -1128,6 +1128,9 @@ function getAllFeeds() {
 }
 
 async function getFeedPosts(url, feedName = '') {
+    if (globalPostsCache[url] && globalPostsCache[url].length > 0) {
+        return globalPostsCache[url];
+    }
     try {
         const { data: { session } } = await db.auth.getSession();
         const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
@@ -2096,6 +2099,19 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 document.querySelectorAll('.summary-item-description').forEach(el => {
                     el.style.display = (summarySubMode === 'list') ? 'block' : 'none';
                 });
+
+                if (summarySubMode === 'report') {
+                    document.querySelectorAll('.post-row').forEach(row => {
+                        const post = row.postData;
+                        if (post && !post.isFullyLoaded && !post.link.includes('youtube.com') && !post.link.includes('youtu.be')) {
+                            const contentBody = row.querySelector('.report-content-body');
+                            if (contentBody) {
+                                contentBody.innerHTML = '<em>Lade vollständigen Artikel...</em>';
+                            }
+                            loadFullInlineContentDirect(post, row);
+                        }
+                    });
+                }
             };
         }
         
