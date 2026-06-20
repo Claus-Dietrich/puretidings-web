@@ -274,14 +274,36 @@ async function init() {
     document.getElementById('login-btn').onclick = handleLogin;
     document.getElementById('logout-btn').onclick = handleLogout;
     
-    // Mobile Sidebar Toggle
+    // Sidebar Toggle (Mobile Drawer & Desktop Collapse)
     const menuToggleBtn = document.getElementById('menu-toggle-btn');
     const sidebar = document.getElementById('feed-tree-container');
     const postsContainer = document.getElementById('posts-container');
+    
+    // Restore sidebar state from localStorage (Desktop only)
+    const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (sidebarCollapsed && sidebar) {
+        sidebar.classList.add('collapsed');
+        const resizer = document.getElementById('sidebar-resizer');
+        if (resizer) {
+            resizer.classList.add('collapsed');
+        }
+    }
+
     if (menuToggleBtn && sidebar) {
         menuToggleBtn.onclick = (e) => {
             e.stopPropagation();
-            sidebar.classList.toggle('active');
+            if (window.innerWidth <= 768) {
+                // Mobile behavior: drawer slide-in/out
+                sidebar.classList.toggle('active');
+            } else {
+                // Desktop behavior: collapse/expand sidebar
+                const isCollapsed = sidebar.classList.toggle('collapsed');
+                const resizer = document.getElementById('sidebar-resizer');
+                if (resizer) {
+                    resizer.classList.toggle('collapsed', isCollapsed);
+                }
+                localStorage.setItem('sidebarCollapsed', isCollapsed ? 'true' : 'false');
+            }
         };
     }
     if (postsContainer && sidebar) {
@@ -321,8 +343,7 @@ async function init() {
     const settingsGeminiKey = document.getElementById('settings-gemini-key');
     const settingsAiPrompt = document.getElementById('settings-ai-prompt');
     const settingsYtPrompt = document.getElementById('settings-yt-prompt');
-    const settingsMarkAllRead = document.getElementById('settings-mark-all-read');
-    const settingsMarkAllUnread = document.getElementById('settings-mark-all-unread');
+
 
     if (settingsBtn && settingsOverlay) {
         settingsBtn.onclick = () => {
@@ -339,22 +360,7 @@ async function init() {
             settingsOverlay.style.display = 'none';
         };
     }
-    if (settingsMarkAllRead && settingsOverlay) {
-        settingsMarkAllRead.onclick = async () => {
-            if (confirm("Möchten Sie wirklich alle Artikel in allen Kanälen als gelesen markieren?")) {
-                await markAllAsRead();
-                settingsOverlay.style.display = 'none';
-            }
-        };
-    }
-    if (settingsMarkAllUnread && settingsOverlay) {
-        settingsMarkAllUnread.onclick = async () => {
-            if (confirm("Möchten Sie wirklich alle Artikel in allen Kanälen als ungelesen markieren?")) {
-                await markAllAsUnread();
-                settingsOverlay.style.display = 'none';
-            }
-        };
-    }
+
     if (settingsSave && settingsOverlay) {
         settingsSave.onclick = async () => {
             const apiKey = settingsGeminiKey.value.trim();

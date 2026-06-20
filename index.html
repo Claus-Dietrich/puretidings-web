@@ -56,6 +56,17 @@
         .action-btn { background: var(--button-bg-color); border: 1px solid var(--border-color); color: var(--text-color) !important; width: 34px; height: 34px; border-radius: 4px; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
         .action-btn:hover { background: var(--hover-bg); border-color: var(--primary-orange); }
         .feed-header { background: var(--sidebar-bg); padding: 10px 15px; font-size: 12px; font-weight: 700; color: var(--text-color-darker); border-bottom: 1px solid var(--border-color); text-transform: uppercase; letter-spacing: 1px; }
+        @media (min-width: 769px) {
+            #feed-tree-container.collapsed {
+                width: 0 !important;
+                min-width: 0 !important;
+                border-right: none !important;
+                overflow: hidden !important;
+            }
+            #sidebar-resizer.collapsed {
+                display: none !important;
+            }
+        }
         /* Mobile-Friendly Adjustments */
         @media (max-width: 768px) {
             #menu-toggle-btn {
@@ -178,7 +189,7 @@
     <div id="app-container">
         <header id="web-header">
             <div style="display:flex; align-items:center; gap:10px;">
-                <button id="menu-toggle-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color); font-size:18px; padding:4px 8px; border-radius:4px; cursor:pointer; display:none; line-height: 1; outline: none;" title="Menü umschalten">☰</button>
+                <button id="menu-toggle-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color); font-size:18px; padding:4px 8px; border-radius:4px; cursor:pointer; display:inline-block; line-height: 1; outline: none;" title="Menü umschalten">☰</button>
                 <strong>PureTidings</strong>
                 <span id="user-badge" style="font-size:12px; color:var(--text-color-darker);"></span>
             </div>
@@ -263,13 +274,7 @@
                 </div>
             </div>
 
-            <div style="margin-bottom: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                <label style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 10px;">Kanalübergreifende Aktionen:</label>
-                <div style="display: flex; gap: 10px;">
-                    <button id="settings-mark-all-read" style="flex: 1; padding: 10px; background: var(--button-bg-color); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;">Alle gelesen ✔</button>
-                    <button id="settings-mark-all-unread" style="flex: 1; padding: 10px; background: var(--button-bg-color); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;">Alle ungelesen ↩</button>
-                </div>
-            </div>
+
             <button id="settings-save-btn" style="width: 100%; padding: 12px; background: #ff9800; border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px;">Speichern</button>
         </div>
     </div>
