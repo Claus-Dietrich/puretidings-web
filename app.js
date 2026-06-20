@@ -135,22 +135,22 @@ function renderSettingsRules() {
     
     const rules = getWebRules();
     if (rules.length === 0) {
-        rulesList.innerHTML = '<div style="color:var(--text-color-darker); font-style:italic; padding: 4px 0;">Keine Regeln definiert.</div>';
+        rulesList.innerHTML = '<div style="color:var(--text-color-darker); font-style:italic; padding: 4px 0;">No rules defined.</div>';
         return;
     }
     
     let html = '<div style="display:flex; flex-direction:column; gap:6px; max-height: 150px; overflow-y:auto; padding-right:5px; margin-bottom:10px;">';
     rules.forEach((rule, index) => {
-        const fieldMap = { title: 'Titel', author: 'Autor', desc: 'Inhalt' };
-        const condMap = { contains: 'enthält', 'not-contains': 'enthält nicht', equals: 'ist gleich' };
-        const actMap = { notify: 'Markieren', markAsRead: 'Gelesen', hide: 'Ausblenden' };
+        const fieldMap = { title: 'Title', author: 'Author', desc: 'Content' };
+        const condMap = { contains: 'contains', 'not-contains': 'does not contain', equals: 'equals' };
+        const actMap = { notify: 'Mark', markAsRead: 'Read', hide: 'Hide' };
         
         html += `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:4px; gap:8px;">
-                <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="WENN ${fieldMap[rule.field]} ${condMap[rule.condition]} '${rule.value}' DANN ${actMap[rule.action]}">
-                    <strong>WENN</strong> ${fieldMap[rule.field]} ${condMap[rule.condition]} <strong>'${rule.value}'</strong> <strong>DANN</strong> ${actMap[rule.action]}
+                <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="IF ${fieldMap[rule.field]} ${condMap[rule.condition]} '${rule.value}' THEN ${actMap[rule.action]}">
+                    <strong>IF</strong> ${fieldMap[rule.field]} ${condMap[rule.condition]} <strong>'${rule.value}'</strong> <strong>THEN</strong> ${actMap[rule.action]}
                 </div>
-                <span onclick="deleteWebRule(${index})" style="color:#d93025; font-weight:bold; cursor:pointer; font-size:14px; padding: 0 4px;" title="Regel löschen">🗑️</span>
+                <span onclick="deleteWebRule(${index})" style="color:#d93025; font-weight:bold; cursor:pointer; font-size:14px; padding: 0 4px;" title="Delete rule">🗑️</span>
             </div>
         `;
     });
@@ -181,7 +181,7 @@ function setupRulesEvents() {
             const action = document.getElementById('new-rule-action').value;
             
             if (!value) {
-                alert("Bitte gib ein Schlüsselwort ein.");
+                alert("Please enter a keyword.");
                 return;
             }
             
@@ -214,9 +214,9 @@ function showErrorOnScreen(msg) {
     const container = document.getElementById('posts-container');
     if (container) {
         container.innerHTML = `<div style="padding:40px; color:#ff4444; text-align:center;">
-            <h3>Etwas ist schiefgelaufen</h3>
+            <h3>Something went wrong</h3>
             <p>${msg}</p>
-            <button onclick="location.reload()" style="padding:10px 20px; background:#444; color:white; border:none; border-radius:5px; cursor:pointer;">Seite neu laden</button>
+            <button onclick="location.reload()" style="padding:10px 20px; background:#444; color:white; border:none; border-radius:5px; cursor:pointer;">Reload Page</button>
         </div>`;
     }
 }
@@ -231,7 +231,7 @@ async function init() {
     }
 
     if (!window.supabase) {
-        showErrorOnScreen("Supabase Bibliothek konnte nicht geladen werden.");
+        showErrorOnScreen("Supabase library could not be loaded.");
         return;
     }
 
@@ -390,10 +390,10 @@ async function init() {
                     });
                 }
 
-                alert("Einstellungen lokal und in der Cloud gespeichert!");
+                alert("Settings saved locally and in the cloud!");
             } catch (e) {
                 console.error("Cloud-Speicherungsfehler:", e);
-                alert("Einstellungen lokal gespeichert, aber Cloud-Speicherung fehlgeschlagen: " + e.message);
+                alert("Settings saved locally, but cloud save failed: " + e.message);
             }
         };
     }
@@ -504,16 +504,16 @@ function toggleUI(isLoggedIn) {
 async function handleLogin() {
     const email = document.getElementById('email-input').value.trim();
     const password = document.getElementById('password-input').value;
-    if (!email) return alert('E-Mail eingeben');
+    if (!email) return alert('Please enter your email');
     
-    document.getElementById('auth-status').innerText = "Verarbeite...";
+    document.getElementById('auth-status').innerText = "Processing...";
     if (password) {
         const { error } = await db.auth.signInWithPassword({ email, password });
         if (error) alert(error.message);
     } else {
         const { error } = await db.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
         if (error) alert(error.message);
-        else alert("Magic Link gesendet!");
+        else alert("Magic Link sent!");
     }
 }
 
@@ -611,7 +611,7 @@ async function loadApp(user) {
         }
         calculateAllUnreadCounts();
 
-    } catch (e) { showErrorOnScreen("Fehler beim Laden der Profildaten: " + e.message); }
+    } catch (e) { showErrorOnScreen("Error loading profile data: " + e.message); }
 }
 
 function checkProStatus(data) {
@@ -834,8 +834,8 @@ function renderSidebar(tree) {
         <h3 id="sidebar-feeds-header">
             <span>My Feeds</span>
             <div style="display:flex; gap:10px; text-transform:none;">
-                <span id="add-feed-btn" title="Feed hinzufügen">+ Feed</span>
-                <span id="add-folder-btn" title="Ordner hinzufügen">+ Ordner</span>
+                <span id="add-feed-btn" title="Add feed">+ Feed</span>
+                <span id="add-folder-btn" title="Add folder">+ Folder</span>
             </div>
         </h3>
         <div id="feed-list-items" style="padding-bottom: 20px;"></div>
@@ -914,8 +914,8 @@ function renderSidebar(tree) {
                     <span class="folder-toggle" draggable="false" style="margin-right:8px; width:12px; font-family:monospace; opacity:0.5;">▼</span> 
                     <span class="folder-title" draggable="false" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name.toUpperCase()}</span>
                     <span class="edit-actions" draggable="false" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
-                        <span class="edit-btn" draggable="false" title="Umbenennen" style="opacity:0.6; cursor:pointer;">✏️</span>
-                        <span class="delete-btn" draggable="false" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
+                        <span class="edit-btn" draggable="false" title="Rename" style="opacity:0.6; cursor:pointer;">✏️</span>
+                        <span class="delete-btn" draggable="false" title="Delete" style="opacity:0.6; cursor:pointer;">🗑️</span>
                     </span>
                 `;
                 li.onclick = (e) => {
@@ -958,8 +958,8 @@ function renderSidebar(tree) {
                     <span class="feed-title-span" draggable="false" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.name}</span>
                     <span class="unread-count" draggable="false" style="font-size:10px; background:#4a90e2; color:white; padding:1px 6px; border-radius:10px; margin-left:5px; display:none;">0</span>
                     <span class="edit-actions" draggable="false" style="display:none; gap:6px; margin-left:10px; font-size:12px;">
-                        <span class="edit-btn" draggable="false" title="Bearbeiten" style="opacity:0.6; cursor:pointer;">✏️</span>
-                        <span class="delete-btn" draggable="false" title="Löschen" style="opacity:0.6; cursor:pointer;">🗑️</span>
+                        <span class="edit-btn" draggable="false" title="Edit" style="opacity:0.6; cursor:pointer;">✏️</span>
+                        <span class="delete-btn" draggable="false" title="Delete" style="opacity:0.6; cursor:pointer;">🗑️</span>
                     </span>
                 `;
                 li.onclick = () => loadFeedPosts(n.url, n.name);
@@ -1081,7 +1081,7 @@ function handleAddFeedPrompt() {
     let folderId = "";
     if (folders.length > 0) {
         const folderNames = folders.map((f, i) => `${i + 1}. ${f.name}`).join("\n");
-        const chosen = prompt(`In welchen Ordner soll der Feed?\n\nVerfügbare Ordner:\n${folderNames}\n\nGib die Nummer ein, oder drücke OK für die Hauptebene:`);
+        const chosen = prompt(`In which folder should the feed go?\n\nAvailable folders:\n${folderNames}\n\nEnter the number, or press OK for the root level:`);
         if (chosen) {
             const idx = parseInt(chosen, 10) - 1;
             if (idx >= 0 && idx < folders.length) {
@@ -1112,7 +1112,7 @@ function handleAddFeedPrompt() {
 }
 
 function handleAddFolderPrompt() {
-    const name = prompt("Name des Ordners:");
+    const name = prompt("Name of the folder:");
     if (!name || name.trim().length === 0) return;
 
     const newFolder = {
@@ -1127,17 +1127,17 @@ function handleAddFolderPrompt() {
 }
 
 function handleRenameNode(node) {
-    const newName = prompt("Neuen Namen eingeben:", node.name);
+    const newName = prompt("Enter new name:", node.name);
     if (!newName || newName.trim().length === 0) return;
     node.name = newName.trim();
     saveFeedTreeToDatabase();
 }
 
 function handleEditFeed(feedNode) {
-    const newName = prompt("Feed-Namen bearbeiten:", feedNode.name);
+    const newName = prompt("Edit feed name:", feedNode.name);
     if (newName === null) return; // cancelled
     
-    const newUrl = prompt("Feed-URL bearbeiten:", feedNode.url);
+    const newUrl = prompt("Edit feed URL:", feedNode.url);
     if (newUrl === null) return; // cancelled
     
     if (newName.trim()) feedNode.name = newName.trim();
@@ -1147,7 +1147,7 @@ function handleEditFeed(feedNode) {
 }
 
 function handleDeleteNode(node) {
-    if (!confirm(`Möchtest du "${node.name}" wirklich löschen?`)) return;
+    if (!confirm(`Are you sure you want to delete "${node.name}"?`)) return;
     
     removeNodeFromTree(userData.feed_tree, node.id);
     saveFeedTreeToDatabase();
@@ -1475,11 +1475,11 @@ async function showView(view) {
     if (view === 'summary' && sumBtn) sumBtn.classList.add('active');
     
     const container = document.getElementById('posts-container');
-    container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Lade ${view === 'all' ? 'alle' : (view === 'unread' ? 'ungelesene' : (view === 'favorites' ? 'Favoriten-' : (view === 'keywords' ? 'Keyword-' : 'Zusammenfassungs-')))} Artikel...</div></div>`;
+    container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Loading ${view === 'all' ? 'all' : (view === 'unread' ? 'unread' : (view === 'favorites' ? 'favorite' : (view === 'keywords' ? 'keyword' : 'summary')))} articles...</div></div>`;
     
     const feeds = getAllFeeds();
     if (feeds.length === 0) {
-        container.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">Keine Feeds abonniert.</div>';
+        container.innerHTML = '<div style="padding:40px; text-align:center; color:#888;">No feeds subscribed.</div>';
         return;
     }
 
@@ -1582,7 +1582,7 @@ async function showView(view) {
             handleSearch(searchInput.value);
         }
     } catch (e) {
-        container.innerHTML = `<div style="padding:20px; color:red;">Fehler beim Laden: ${e.message}</div>`;
+        container.innerHTML = `<div style="padding:20px; color:red;">Error loading: ${e.message}</div>`;
     }
 }
 
@@ -1810,8 +1810,8 @@ function downloadSummaryLinks() {
     const now = new Date();
     const datePart = now.toISOString().split('T')[0];
     const timePart = now.getHours().toString().padStart(2, '0') + '-' + now.getMinutes().toString().padStart(2, '0');
-    const defaultName = `puretidings-summary-${datePart}_${timePart}.${extension}`;
-    let fileName = prompt("Name für den Bericht eingeben:", defaultName);
+    const defaultName = `summary-report-${datePart}_${timePart}.${extension}`;
+    let fileName = prompt("Enter name for the report:", defaultName);
     
     if (fileName === null) return;
     if (fileName.trim() === "") fileName = defaultName;
@@ -2056,7 +2056,7 @@ function createPostRowElement(post, isToolbarView) {
             <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
                 <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
                 <div class="report-content-body">
-                    ${(!post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) ? '<em>Lade vollständigen Artikel...</em>' : (desc || '')}
+                    ${(!post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) ? '<em>Loading full article...</em>' : (desc || '')}
                 </div>
             </div>
 
@@ -2067,9 +2067,9 @@ function createPostRowElement(post, isToolbarView) {
         </div>
         <div class="post-actions" style="display:flex; gap:5px;">
             <button class="action-btn fav-btn" title="Favorit" style="color:${isFav ? 'gold' : 'white'} !important">${isFav ? '★' : '☆'}</button>
-            <button class="action-btn sum-btn" title="Zur Summary Liste hinzufügen" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
+            <button class="action-btn sum-btn" title="Add to Summary list" style="border:none; background:none; cursor:pointer; font-size:18px; filter:${isSum ? 'sepia(1) saturate(5) hue-rotate(90deg)' : 'grayscale(1)'} !important;">📋</button>
             <button class="action-btn reader-btn" title="Reader">👓</button>
-            <button class="action-btn unread-btn" title="Als ungelesen markieren" style="display:${isRead ? 'flex' : 'none'}">↩</button>
+            <button class="action-btn unread-btn" title="Mark as unread" style="display:${isRead ? 'flex' : 'none'}">↩</button>
             <a href="${link}" target="_blank" class="action-btn" title="Original" style="text-decoration:none;" onclick="markAsRead('${link}'); event.stopPropagation();">🔗</a>
         </div>
     `;
@@ -2091,7 +2091,7 @@ function createPostRowElement(post, isToolbarView) {
         markAsUnread(link, row);
     };
 
-    if (isToolbarView && summarySubMode === 'report' && !post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) {
+    if (isToolbarView && summarySubMode === 'report' && !post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be') && !link.includes('mail.google.com')) {
         loadFullInlineContentDirect(post, row);
     }
 
@@ -2109,8 +2109,8 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>${headerTitle}</span>
                 <div style="display:flex; gap:10px;">
-                    <button class="action-btn" title="Alle angezeigten Artikel als gelesen markieren" onclick="markFeedAsRead('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
-                    <button class="action-btn" title="Alle angezeigten Artikel als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
+                    <button class="action-btn" title="Mark all displayed articles as read" onclick="markFeedAsRead('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Mark all read ✔</button>
+                    <button class="action-btn" title="Mark all displayed articles as unread" onclick="markFeedAsUnread('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Mark all unread ↩</button>
                 </div>
             </div>`;
 
@@ -2118,16 +2118,16 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             <div id="summary-toolbar">
                 <div class="summary-toolbar-section">
                     <select id="web-summary-date-filter">
-                        <option value="all" ${summaryDateFilterVal === 'all' ? 'selected' : ''}>Alle Daten</option>
-                        <option value="today" ${summaryDateFilterVal === 'today' ? 'selected' : ''}>Heute</option>
-                        <option value="7days" ${summaryDateFilterVal === '7days' ? 'selected' : ''}>Letzte 7 Tage</option>
-                        <option value="30days" ${summaryDateFilterVal === '30days' ? 'selected' : ''}>Letzte 30 Tage</option>
-                        <option value="custom" ${summaryDateFilterVal === 'custom' ? 'selected' : ''}>Benutzerdefiniert...</option>
+                        <option value="all" ${summaryDateFilterVal === 'all' ? 'selected' : ''}>All Dates</option>
+                        <option value="today" ${summaryDateFilterVal === 'today' ? 'selected' : ''}>Today</option>
+                        <option value="7days" ${summaryDateFilterVal === '7days' ? 'selected' : ''}>Last 7 Days</option>
+                        <option value="30days" ${summaryDateFilterVal === '30days' ? 'selected' : ''}>Last 30 Days</option>
+                        <option value="custom" ${summaryDateFilterVal === 'custom' ? 'selected' : ''}>Custom...</option>
                     </select>
                     <div id="web-custom-range-container" class="${summaryDateFilterVal === 'custom' ? '' : 'hidden'}">
                         <input type="date" id="web-filter-date-from" value="${filterDateFromVal}">
                         <input type="time" id="web-filter-time-from" value="${filterTimeFromVal}">
-                        <span class="range-separator">bis</span>
+                        <span class="range-separator">to</span>
                         <input type="date" id="web-filter-date-to" value="${filterDateToVal}">
                         <input type="time" id="web-filter-time-to" value="${filterTimeToVal}">
                     </div>
@@ -2141,20 +2141,20 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                         <option value="markdown" ${exportFormatVal === 'markdown' ? 'selected' : ''}>Markdown</option>
                         <option value="html" ${exportFormatVal === 'html' ? 'selected' : ''}>HTML</option>
                     </select>
-                    <button id="web-copy-summary" class="secondary-btn">Kopieren 📋</button>
-                    <button id="web-download-summary" class="secondary-btn">Speichern 💾</button>
+                    <button id="web-copy-summary" class="secondary-btn">Copy 📋</button>
+                    <button id="web-download-summary" class="secondary-btn">Save 💾</button>
                 </div>
                 
                 <div style="border-left:1px solid var(--border-color); height:20px; margin:0 5px;"></div>
                 
                 <div class="summary-toolbar-section">
-                    <button id="web-ai-report">Zusammenfassen 🤖</button>
+                    <button id="web-ai-report">Summarize 🤖</button>
                     <button id="web-full-view-summary" class="secondary-btn">
-                        ${summarySubMode === 'list' ? 'Report-Ansicht' : 'Listen-Ansicht'}
+                        ${summarySubMode === 'list' ? 'Report View' : 'List View'}
                     </button>
                     ${((currentViewMode === 'favorites' || currentViewMode === 'summary' || currentViewMode === 'keywords') && !currentFeedUrl) ? `
                         <button id="web-clear-list" class="delete-btn">
-                            ${currentViewMode === 'favorites' ? 'Favoriten leeren 🗑' : (currentViewMode === 'keywords' ? 'Matches leeren 🗑' : 'Liste leeren 🗑')}
+                            ${currentViewMode === 'favorites' ? 'Clear Favorites 🗑' : (currentViewMode === 'keywords' ? 'Clear Matches 🗑' : 'Clear List 🗑')}
                         </button>
                     ` : ''}
                 </div>
@@ -2163,10 +2163,10 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             <!-- Bulk Summary Prompt Editor Section -->
             <div id="web-ai-prompt-editor-section" class="hidden" style="margin: 10px 15px; padding: 12px; background: #1e1e1e; border: 1px solid var(--border-color, #333); border-radius: 6px;">
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <label for="web-ai-custom-prompt-val" style="font-size: 12px; font-weight: bold; color: var(--text-color-darker, #aaa);">Prompt für diese Sammel-Zusammenfassung anpassen:</label>
+                    <label for="web-ai-custom-prompt-val" style="font-size: 12px; font-weight: bold; color: var(--text-color-darker, #aaa);">Customize prompt for this bulk summary:</label>
                     <div style="display: flex; gap: 10px; align-items: flex-end;">
                         <textarea id="web-ai-custom-prompt-val" rows="2" style="flex: 1; padding: 8px; background: #252525; color: #e8eaed; border: 1px solid #3c4043; border-radius: 6px; font-family: inherit; font-size: 12px; resize: vertical; outline: none; box-sizing: border-box;"></textarea>
-                        <button id="web-ai-generate-with-prompt-btn" style="height: 32px; padding: 0 15px; font-weight: bold; background: #3c5c8b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Zusammenfassung starten 🤖</button>
+                        <button id="web-ai-generate-with-prompt-btn" style="height: 32px; padding: 0 15px; font-weight: bold; background: #3c5c8b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Start Summary 🤖</button>
                     </div>
                 </div>
             </div>
@@ -2234,7 +2234,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             }
             const outputContainer = document.getElementById('summary-ai-output');
             if (outputContainer) {
-                outputContainer.innerHTML = '<p style="color: #eee; font-style: italic; margin-top: 15px;">Passe den Prompt bei Bedarf oben an und klicke auf "Zusammenfassung starten 🤖", um fortzufahren.</p>';
+                outputContainer.innerHTML = '<p style="color: #eee; font-style: italic; margin-top: 15px;">Adjust the prompt above if needed and click "Start Summary 🤖" to continue.</p>';
                 outputContainer.style.display = 'block';
             }
         };
@@ -2249,14 +2249,14 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             const customAiPrompt = localStorage.getItem('gemini_ai_prompt') || '';
             webAiCustomPromptVal.value = customAiPrompt && customAiPrompt.trim() !== ''
                 ? customAiPrompt.trim()
-                : "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use German language for the summary:";
+                : "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use English language for the summary:";
         }
         
         const fullViewBtn = document.getElementById('web-full-view-summary');
         if (fullViewBtn) {
             fullViewBtn.onclick = () => {
                 summarySubMode = (summarySubMode === 'list') ? 'report' : 'list';
-                fullViewBtn.innerText = (summarySubMode === 'list') ? 'Report-Ansicht' : 'Listen-Ansicht';
+                fullViewBtn.innerText = (summarySubMode === 'list') ? 'Report View' : 'List View';
                 
                 document.querySelectorAll('.report-inline-description').forEach(el => {
                     el.style.display = (summarySubMode === 'report') ? 'block' : 'none';
@@ -2269,10 +2269,10 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 if (summarySubMode === 'report') {
                     document.querySelectorAll('.post-row').forEach(row => {
                         const post = row.postData;
-                        if (post && !post.isFullyLoaded && !post.link.includes('youtube.com') && !post.link.includes('youtu.be')) {
+                        if (post && !post.isFullyLoaded && !post.link.includes('youtube.com') && !post.link.includes('youtu.be') && !post.link.includes('mail.google.com')) {
                             const contentBody = row.querySelector('.report-content-body');
                             if (contentBody) {
-                                contentBody.innerHTML = '<em>Lade vollständigen Artikel...</em>';
+                                contentBody.innerHTML = '<em>Loading full article...</em>';
                             }
                             loadFullInlineContentDirect(post, row);
                         }
@@ -2284,7 +2284,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         if (!posts || posts.length === 0) {
             const noPostsDiv = document.createElement('div');
             noPostsDiv.style.cssText = "padding:40px; text-align:center; color:#888;";
-            noPostsDiv.innerText = currentViewMode === 'favorites' ? "Keine Artikel in deinen Favoriten." : (currentViewMode === 'keywords' ? "Keine Artikel entsprechen deinen Keyword-Regeln." : (currentViewMode === 'all' ? "Keine Artikel vorhanden." : (currentViewMode === 'feed' ? "Keine Artikel in diesem Kanal gefunden." : "Keine Artikel in der Zusammenfassungsliste.")));
+            noPostsDiv.innerText = currentViewMode === 'favorites' ? "No articles in your favorites." : (currentViewMode === 'keywords' ? "No articles match your keyword rules." : (currentViewMode === 'all' ? "No articles available." : (currentViewMode === 'feed' ? "No articles found in this feed." : "No articles in the summary list.")));
             container.appendChild(noPostsDiv);
             return;
         }
@@ -2294,7 +2294,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
                     <span>${headerTitle}</span>
                 </div>
-                <div style="padding:40px; text-align:center; color:#888;">Keine Artikel gefunden.</div>
+                <div style="padding:40px; text-align:center; color:#888;">No articles found.</div>
             `;
             return;
         }
@@ -2302,8 +2302,8 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         let headerHtml = `<div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span>${headerTitle}</span>
             <div style="display:flex; gap:10px;">
-                <button class="action-btn" title="Alle angezeigten Artikel als gelesen markieren" onclick="markFeedAsRead('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle gelesen ✔</button>
-                <button class="action-btn" title="Alle angezeigten Artikel als ungelesen markieren" onclick="markFeedAsUnread('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Alle ungelesen ↩</button>
+                <button class="action-btn" title="Mark all displayed articles as read" onclick="markFeedAsRead('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Mark all read ✔</button>
+                <button class="action-btn" title="Mark all displayed articles as unread" onclick="markFeedAsUnread('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Mark all unread ↩</button>
             </div>
         </div>`;
         container.innerHTML = headerHtml;
@@ -2350,14 +2350,14 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
         
         // Zuerst nach den vorgegebenen Regeln sortiert
         rules.forEach(rule => {
-            const label = `Regel: WENN <strong>${rule.field}</strong> ${rule.condition.replace('-', ' ')} <code>${rule.value}</code>`;
+            const label = `Rule: IF <strong>${rule.field}</strong> ${rule.condition.replace('-', ' ')} <code>${rule.value}</code>`;
             renderRuleSection(rule.id, label);
         });
         
         // Dann eventuell gelöschte Regeln
         for (const ruleId in postsByRule) {
             if (!processedRuleIds.has(ruleId)) {
-                renderRuleSection(ruleId, `Matches für eine gelöschte Regel`);
+                renderRuleSection(ruleId, `Matches for a deleted rule`);
             }
         }
     } else {
@@ -2695,20 +2695,20 @@ async function generateAiSummary() {
     
     const geminiApiKey = localStorage.getItem('gemini_api_key') || '';
     if (!geminiApiKey || geminiApiKey.trim() === '') {
-        alert("Bitte gib zuerst einen gültigen Google Gemini API Key in das Textfeld ein.");
+        alert("Please enter a valid Google Gemini API Key in the settings first.");
         return;
     }
     
     const postsToSummarize = getCurrentlyFilteredWebPosts();
     if (postsToSummarize.length === 0) {
-        alert("Deine Zusammenfassungsliste ist leer oder es entsprechen keine Artikel den Filtern.");
+        alert("Your summary list is empty or no articles match the filters.");
         return;
     }
     
     outputContainer.innerHTML = `
         <div style="background:#1e1e1e; border:1px solid #ff9800; border-radius:8px; padding:20px; margin-bottom:20px; text-align:center;">
             <div class="spinner"></div>
-            <div style="margin-top:10px; color:#ff9800; font-weight:bold;">Zusammenfassung wird über Gemini generiert...</div>
+            <div style="margin-top:10px; color:#ff9800; font-weight:bold;">Generating summary via Gemini...</div>
         </div>
     `;
     outputContainer.style.display = 'block';
@@ -2717,7 +2717,7 @@ async function generateAiSummary() {
         const webAiCustomPromptVal = document.getElementById('web-ai-custom-prompt-val');
         let promptText = webAiCustomPromptVal && webAiCustomPromptVal.value.trim() !== ''
             ? webAiCustomPromptVal.value.trim() + "\n\n"
-            : "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use German language for the summary:\n\n";
+            : "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use English language for the summary:\n\n";
         
         postsToSummarize.forEach((post, index) => {
             promptText += `### Article ${index + 1}: ${post.title}\n`;
@@ -2756,16 +2756,16 @@ async function generateAiSummary() {
         outputContainer.innerHTML = `
             <div style="background:#1e1e1e; border:1px solid #333; border-radius:8px; padding:20px; margin-bottom:20px; line-height:1.6; position:relative;">
                 <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-                    <strong style="color:#ff9800; font-size:16px;">🤖 KI-Zusammenfassung (Gemini)</strong>
+                    <strong style="color:#ff9800; font-size:16px;">🤖 AI Summary (Gemini)</strong>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <select id="bulk-export-ai-format" title="Export Format" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #444; background: #252525; color: white; font-size:12px;">
                             <option value="markdown">Markdown</option>
                             <option value="txt">TXT</option>
                             <option value="html">HTML</option>
                         </select>
-                        <button class="action-btn" id="bulk-copy-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Kopieren">Kopieren 📋</button>
-                        <button class="action-btn" id="bulk-download-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Speichern">Speichern 💾</button>
-                        <button class="action-btn" id="bulk-close-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Schließen">Schließen ✖</button>
+                        <button class="action-btn" id="bulk-copy-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Copy">Copy 📋</button>
+                        <button class="action-btn" id="bulk-download-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Save">Save 💾</button>
+                        <button class="action-btn" id="bulk-close-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Close">Close ✖</button>
                     </div>
                 </div>
                 <div id="ai-report-body" class="ai-report-body" style="color:#eee; font-size:14px; overflow-y:auto; max-height:400px; text-align:left;">${htmlContent}</div>
@@ -2786,9 +2786,9 @@ async function generateAiSummary() {
             }
             try {
                 await navigator.clipboard.writeText(exportText);
-                alert("Zusammenfassungsbericht in die Zwischenablage kopiert!");
+                alert("Summary report copied to clipboard!");
             } catch(err) {
-                console.error("Kopieren fehlgeschlagen:", err);
+                console.error("Copy failed:", err);
             }
         };
 
@@ -2822,7 +2822,7 @@ async function generateAiSummary() {
     } catch(e) {
         outputContainer.innerHTML = `
             <div style="background:#1e1e1e; border:1px solid #ff4444; border-radius:8px; padding:20px; margin-bottom:20px; color:#ff4444; text-align:center;">
-                <strong>Fehler beim Generieren der Zusammenfassung:</strong>
+                <strong>Error generating summary:</strong>
                 <p>${e.message}</p>
             </div>
         `;
@@ -2832,7 +2832,7 @@ async function generateAiSummary() {
 async function copySummaryLinks() {
     const posts = getCurrentlyFilteredWebPosts();
     if (posts.length === 0) {
-        alert("Deine Zusammenfassungsliste ist leer oder es entsprechen keine Artikel den Filtern.");
+        alert("Your summary list is empty or no articles match the filters.");
         return;
     }
     
@@ -2841,16 +2841,16 @@ async function copySummaryLinks() {
     
     try {
         await navigator.clipboard.writeText(content);
-        showWebCopyStatus(`Als ${format.toUpperCase()} kopiert!`, 'success');
+        showWebCopyStatus(`Copied as ${format.toUpperCase()}!`, 'success');
     } catch (err) {
-        console.error('Kopieren fehlgeschlagen: ', err);
-        showWebCopyStatus("Kopieren fehlgeschlagen.", 'error');
+        console.error('Copy failed: ', err);
+        showWebCopyStatus("Copy failed.", 'error');
     }
 }
 
 async function clearCurrentList() {
     if (currentViewMode === 'favorites') {
-        if (!confirm("Bist du sicher, dass du alle deine Favoriten löschen möchtest?")) return;
+        if (!confirm("Are you sure you want to delete all your favorites?")) return;
         userData.favorited_links = [];
         
         const container = document.getElementById('posts-container');
@@ -2928,7 +2928,7 @@ async function getYouTubeTranscript(url) {
         videoId = url.split('youtube.com/shorts/')[1].split('?')[0];
     }
 
-    if (!videoId) return { status: 'error', message: 'Video-ID konnte nicht extrahiert werden.' };
+    if (!videoId) return { status: 'error', message: 'Could not extract video ID.' };
 
     const extensionId = 'faeeldkkipajnnbkajhdanhbhilfifah';
 
@@ -2948,7 +2948,7 @@ async function getYouTubeTranscript(url) {
             });
 
             if (extResponse && extResponse.status === 'ok' && extResponse.xml) {
-                console.log("Transkript erfolgreich über die Chrome Extension geladen!");
+                console.log("Transcript successfully loaded via Chrome Extension!");
                 const parser = new DOMParser();
                 const xmlDoc = parser.parseFromString(extResponse.xml, "text/xml");
                 let textNodes = Array.from(xmlDoc.getElementsByTagName('p'));
@@ -2962,7 +2962,7 @@ async function getYouTubeTranscript(url) {
                 }
             }
         } catch (err) {
-            console.log("Extension nicht erreichbar oder hat geantwortet mit Fehler. Verwende Fallback-Proxy. Details:", err.message);
+            console.log("Extension unreachable or responded with error. Using fallback proxy. Details:", err.message);
         }
     }
 
@@ -2971,7 +2971,7 @@ async function getYouTubeTranscript(url) {
         const proxyUrl = 'https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed';
         const sessionRes = await db.auth.getSession();
         const session = sessionRes.data?.session;
-        if (!session) throw new Error("Keine aktive Sitzung");
+        if (!session) throw new Error("No active session");
 
         const innerTubeUrl = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
         const innerTubePayload = {
@@ -3001,17 +3001,17 @@ async function getYouTubeTranscript(url) {
             })
         });
 
-        if (!response.ok) return { status: 'error', message: `Fehler beim Laden der YouTube-Daten über den Proxy (Status ${response.status}).` };
+        if (!response.ok) return { status: 'error', message: `Error loading YouTube data via proxy (Status ${response.status}).` };
         const data = await response.json();
         if (data.error) {
-            return { status: 'error', message: `Proxy-Fehler: ${data.error}` };
+            return { status: 'error', message: `Proxy error: ${data.error}` };
         }
 
         const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
-        if (!tracks || tracks.length === 0) return { status: 'not_found', message: 'Für dieses Video existiert kein Skript (keine Untertitel auf YouTube vorhanden).' };
+        if (!tracks || tracks.length === 0) return { status: 'not_found', message: 'No script exists for this video (no subtitles available on YouTube).' };
 
         let track = tracks.find(t => t.languageCode === 'de') || tracks.find(t => t.languageCode === 'en') || tracks[0];
-        if (!track || !track.baseUrl) return { status: 'not_found', message: 'Für dieses Video existiert kein Skript (keine auslesbare Untertitel-Spur gefunden).' };
+        if (!track || !track.baseUrl) return { status: 'not_found', message: 'No script exists for this video (no readable subtitle track found).' };
 
         const tResponse = await fetch(proxyUrl, {
             method: 'POST',
@@ -3022,7 +3022,7 @@ async function getYouTubeTranscript(url) {
             body: JSON.stringify({ url: track.baseUrl })
         });
 
-        if (!tResponse.ok) return { status: 'error', message: 'Skript existiert auf YouTube, konnte aber nicht ausgelesen werden.' };
+        if (!tResponse.ok) return { status: 'error', message: 'Script exists on YouTube but could not be read.' };
         const xmlText = await tResponse.text();
 
         const parser = new DOMParser();
@@ -3037,11 +3037,11 @@ async function getYouTubeTranscript(url) {
             const text = texts.join(' ').replace(/&#39;/g, "'").replace(/&quot;/g, '"').substring(0, 50000);
             return { status: 'ok', text: text };
         } else {
-            return { status: 'error', message: 'Skript existiert auf YouTube, das Format konnte aber nicht ausgelesen werden.' };
+            return { status: 'error', message: 'Script exists on YouTube but the format could not be parsed.' };
         }
     } catch (e) {
-        console.error("Fehler beim Abrufen des YouTube-Transkripts über Proxy:", e);
-        return { status: 'error', message: `Fehler beim Auslesen des Skripts: ${e.message}` };
+        console.error("Error retrieving YouTube transcript via proxy:", e);
+        return { status: 'error', message: `Error reading script: ${e.message}` };
     }
 }
 
@@ -3063,10 +3063,10 @@ async function tryExtensionFetch(url) {
             if (extResponse && extResponse.status === 'ok') {
                 return extResponse.text;
             } else if (extResponse && extResponse.status === 'error') {
-                throw new Error(extResponse.message || "Fehler beim Abrufen über Extension");
+                throw new Error(extResponse.message || "Error retrieving via Extension");
             }
         } catch (err) {
-            console.log("Extension nicht erreichbar oder Fehler bei proxyFetch. Details:", err.message);
+            console.log("Extension unreachable or error in proxyFetch. Details:", err.message);
         }
     }
     return null;
@@ -3219,7 +3219,7 @@ async function openReader(post) {
         try {
             await navigator.clipboard.writeText(content);
             const status = body.querySelector('#reader-copy-status');
-            status.textContent = `Als ${format.toUpperCase()} kopiert!`;
+            status.textContent = `Copied as ${format.toUpperCase()}!`;
             status.style.color = 'green';
             setTimeout(() => status.textContent = '', 3000);
         } catch (err) {
@@ -3254,16 +3254,16 @@ async function openReader(post) {
     async function runAiSummaryGeneration() {
         const geminiApiKey = localStorage.getItem('gemini_api_key') || '';
         if (!geminiApiKey || geminiApiKey.trim() === '') {
-            alert("Bitte hinterlege zuerst deinen Google Gemini API Key in den Einstellungen (Zahnrad-Symbol oben rechts).");
+            alert("Please save your Google Gemini API Key in the settings first (gear icon top right).");
             return;
         }
 
-        aiSummaryBtn.innerText = 'Wird geladen...';
+        aiSummaryBtn.innerText = 'Loading...';
         aiSummaryBtn.disabled = true;
-        aiGenerateWithPromptBtn.innerText = 'Wird geladen...';
+        aiGenerateWithPromptBtn.innerText = 'Loading...';
         aiGenerateWithPromptBtn.disabled = true;
         aiReportContainer.classList.remove('hidden');
-        aiReportContent.innerHTML = '<p><em>Beitrag wird analysiert... bitte warten.</em></p>';
+        aiReportContent.innerHTML = '<p><em>Analyzing post... please wait.</em></p>';
 
         try {
             let promptText = "";
@@ -3272,7 +3272,7 @@ async function openReader(post) {
             const customPrompt = aiCustomPromptVal.value.trim();
 
             if (isYouTube) {
-                aiReportContent.innerHTML = '<p><em>Hole Video-Skript (Transkript) und analysiere Video... bitte warten.</em></p>';
+                aiReportContent.innerHTML = '<p><em>Fetching video script (transcript) and analyzing video... please wait.</em></p>';
                 if (customPrompt && customPrompt !== '') {
                     promptText = customPrompt + "\n\n";
                 } else {
@@ -3297,7 +3297,7 @@ async function openReader(post) {
                 if (transcriptResult && transcriptResult.status === 'ok') {
                     contentText += `[Video Script / Transkript]:\n${transcriptResult.text}\n\n`;
                 } else {
-                    const failMsg = transcriptResult ? transcriptResult.message : 'Skript konnte nicht geladen werden.';
+                    const failMsg = transcriptResult ? transcriptResult.message : 'Script could not be loaded.';
                     contentText += `(Note: Video transcript is not available because: ${failMsg}. Summarizing based on description only. Please write under the video script header the exact reason: "${failMsg}")\n\n`;
                 }
             } else {
@@ -3355,7 +3355,7 @@ async function openReader(post) {
                 let exportText = text;
                 if (aiFormat === 'html') exportText = marked.parse(text);
                 await navigator.clipboard.writeText(exportText);
-                alert("Kopiert!");
+                alert("Copied!");
             };
 
             body.querySelector('#reader-download-ai-report-btn').onclick = () => {
@@ -3384,18 +3384,18 @@ async function openReader(post) {
 
         } catch (err) {
             console.error(err);
-            aiReportContent.innerHTML = `<p style="color:red;"><strong>Fehler:</strong> ${err.message}</p>`;
+            aiReportContent.innerHTML = `<p style="color:red;"><strong>Error:</strong> ${err.message}</p>`;
         } finally {
             aiSummaryBtn.innerText = 'AI Summary';
             aiSummaryBtn.disabled = false;
-            aiGenerateWithPromptBtn.innerText = 'Generieren 🤖';
+            aiGenerateWithPromptBtn.innerText = 'Generate 🤖';
             aiGenerateWithPromptBtn.disabled = false;
         }
     }
 
     aiSummaryBtn.onclick = async () => {
         aiReportContainer.classList.remove('hidden');
-        aiReportContent.innerHTML = '<p style="color: #eee; font-style: italic;">Passe den Prompt bei Bedarf oben an und klicke auf "Generieren 🤖", um die Zusammenfassung zu starten.</p>';
+        aiReportContent.innerHTML = '<p style="color: #eee; font-style: italic;">Adjust the prompt above if needed and click "Generate 🤖" to start the summary.</p>';
         
         const customAiPrompt = localStorage.getItem('gemini_ai_prompt') || '';
         const customYtPrompt = localStorage.getItem('gemini_yt_prompt') || '';
@@ -3438,6 +3438,14 @@ async function openReader(post) {
             `;
             return;
         }
+    }
+
+    if (post.link && post.link.includes('mail.google.com')) {
+        let content = post.desc || 'Kein Inhalt verfügbar.';
+        content = sanitizeReaderContent(content);
+        innerContent.innerHTML = `<div style="font-size:16px; line-height:1.7; color:#eee;">${content}</div>`;
+        post.isFullyLoaded = true;
+        return;
     }
 
     try {
@@ -3484,7 +3492,7 @@ async function loadFullInlineContent(link, btn) {
     if (!container || !contentBody) return;
     
     if (btn) {
-        btn.innerText = 'Lade...';
+        btn.innerText = 'Loading...';
         btn.disabled = true;
     }
     
@@ -3508,16 +3516,16 @@ async function loadFullInlineContent(link, btn) {
                 post.isFullyLoaded = true;
             }
         } else {
-            throw new Error("Konnte den Text der Originalseite nicht extrahieren.");
+            throw new Error("Could not extract the text from the original page.");
         }
     } catch(e) {
         console.error(e);
         const originalDesc = post ? (post.desc || '') : '';
         contentBody.innerHTML = `
             <div style="color:#ff4444; font-size:13px; margin-bottom:10px;">
-                <strong>Automatische Text-Extraktion fehlgeschlagen:</strong> ${e.message}
+                <strong>Automatic text extraction failed:</strong> ${e.message}
             </div>
-            <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; margin-bottom:10px;">Erneut versuchen ↻</button>
+            <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; margin-bottom:10px;">Try again ↻</button>
             <br>
             ${originalDesc}
         `;
@@ -3551,15 +3559,15 @@ async function loadFullInlineContentDirect(post, row) {
                 row.postData.isFullyLoaded = true;
             }
         } else {
-            throw new Error("Text-Extraktion fehlgeschlagen.");
+            throw new Error("Text extraction failed.");
         }
     } catch(e) {
         console.error("Hintergrund-Laden fehlgeschlagen für:", post.link, e);
         contentBody.innerHTML = `
             <div style="color:#ff4444; font-size:13px; margin-bottom:10px;">
-                <strong>Automatische Text-Extraktion fehlgeschlagen:</strong> ${e.message}
+                <strong>Automatic text extraction failed:</strong> ${e.message}
             </div>
-            <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${post.link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; margin-bottom:10px;">Erneut versuchen ↻</button>
+            <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${post.link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; margin-bottom:10px;">Try again ↻</button>
             <br>
             ${post.desc || ''}
         `;

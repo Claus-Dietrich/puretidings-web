@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -169,8 +169,8 @@
         <div id="login-card">
             <img src="128.png" style="width: 64px; margin-bottom: 20px;">
             <h1>PureTidings</h1>
-            <input type="email" id="email-input" placeholder="Deine E-Mail">
-            <input type="password" id="password-input" placeholder="Passwort (optional)">
+            <input type="email" id="email-input" placeholder="Your Email">
+            <input type="password" id="password-input" placeholder="Password (optional)">
             <button id="login-btn">Login / Magic Link</button>
             <div id="auth-status" style="margin-top:15px; font-size:13px; color:#888;"></div>
         </div>
@@ -189,18 +189,18 @@
     <div id="app-container">
         <header id="web-header">
             <div style="display:flex; align-items:center; gap:10px;">
-                <button id="menu-toggle-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color); font-size:18px; padding:4px 8px; border-radius:4px; cursor:pointer; display:inline-block; line-height: 1; outline: none;" title="Menü umschalten">☰</button>
+                <button id="menu-toggle-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color); font-size:18px; padding:4px 8px; border-radius:4px; cursor:pointer; display:inline-block; line-height: 1; outline: none;" title="Toggle Menu">☰</button>
                 <strong>PureTidings</strong>
                 <span id="user-badge" style="font-size:12px; color:var(--text-color-darker);"></span>
             </div>
             <div style="flex:1; max-width:400px; margin:0 20px; position:relative; display:flex; align-items:center;">
-                <input type="text" id="search-input" placeholder="Suchen... (+ AND, , OR, - NOT)" title="Beispiel: Apple +Macbook -iPhone" style="width:100%; padding:6px 30px 6px 15px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:20px; color:var(--input-color); font-size:13px; outline:none;">
-                <span id="search-clear-btn" style="position:absolute; right:12px; cursor:pointer; color:var(--text-color-darker); font-size:14px; display:none; user-select:none; font-family: sans-serif;" title="Suche löschen">✖</span>
+                <input type="text" id="search-input" placeholder="Search... (+ AND, , OR, - NOT)" title="Example: Apple +Macbook -iPhone" style="width:100%; padding:6px 30px 6px 15px; background:var(--input-bg); border:1px solid var(--border-color); border-radius:20px; color:var(--input-color); font-size:13px; outline:none;">
+                <span id="search-clear-btn" style="position:absolute; right:12px; cursor:pointer; color:var(--text-color-darker); font-size:14px; display:none; user-select:none; font-family: sans-serif;" title="Clear Search">✖</span>
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
                 <a id="upgrade-btn" class="hidden" style="color:gold; font-size:11px; border:1px solid gold; padding:4px 10px; border-radius:4px; text-decoration:none; font-weight:bold;">UPGRADE PRO</a>
-                <button id="theme-toggle-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color-darker); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:13px;" title="Hell-/Dunkelmodus umschalten">🌙</button>
-                <button id="settings-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color-darker); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:13px;" title="Einstellungen öffnen">⚙️</button>
+                <button id="theme-toggle-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color-darker); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:13px;" title="Toggle Light/Dark Theme">🌙</button>
+                <button id="settings-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color-darker); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:13px;" title="Open Settings">⚙️</button>
                 <button id="logout-btn" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color-darker); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:11px;">LOGOUT</button>
             </div>
         </header>
@@ -214,68 +214,67 @@
     <div id="settings-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2100; display: none; align-items: center; justify-content: center;">
         <div style="background: var(--header-bg); padding: 30px; border-radius: 12px; max-width: 450px; width: 90%; border: 1px solid var(--border-color); position: relative; color: var(--text-color); max-height: 90vh; overflow-y: auto;">
             <button id="settings-close" style="position: absolute; top: 15px; right: 15px; background: transparent; border: none; color: var(--text-color-darker); cursor: pointer; font-size: 24px; line-height: 1;">&times;</button>
-            <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 20px; font-weight: bold;">Einstellungen</h2>
+            <h2 style="color: #ff9800; margin: 0 0 20px 0; font-size: 20px; font-weight: bold;">Settings</h2>
             <div style="margin-bottom: 20px;">
-                <label for="settings-gemini-key" style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 8px;">Google Gemini API Key (für KI-Berichte):</label>
+                <label for="settings-gemini-key" style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 8px;">Google Gemini API Key (for AI summaries):</label>
                 <input type="password" id="settings-gemini-key" placeholder="AIzaSy..." style="width: 100%; padding: 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--input-color); border-radius: 6px; box-sizing: border-box; font-size: 13px; outline: none;">
                 <p style="font-size: 11px; color: var(--text-color-darker); margin-top: 8px; line-height: 1.4;">
-                    Nutzen Sie Ihren eigenen API-Schlüssel (Bring Your Own Key - BYOK) von Google AI Studio, um KI-Zusammenfassungen zu aktivieren.<br><br>
-                    <strong>So erhalten Sie einen Gemini API-Key:</strong><br>
-                    1. Gehen Sie zu <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color: #ff9800; text-decoration: underline;">Google AI Studio</a> und melden Sie sich an.<br>
-                    2. Klicken Sie auf "Get API key" und erstellen Sie einen neuen Schlüssel.<br>
-                    3. <strong>Wichtiger Hinweis:</strong> Auch wenn Sie nur die kostenlose Stufe nutzen, wird dringend empfohlen, ein Rechnungskonto mit Ihrem Google Cloud-Projekt zu verknüpfen. Andernfalls kann Ihre kostenlose Nutzung im Laufe der Zeit blockiert oder stark eingeschränkt werden.
+                    Use your own API key (Bring Your Own Key - BYOK) from Google AI Studio to activate AI summaries.<br><br>
+                    <strong>How to get a Gemini API key:</strong><br>
+                    1. Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color: #ff9800; text-decoration: underline;">Google AI Studio</a> and log in.<br>
+                    2. Click on "Get API key" and create a new key.<br>
+                    3. <strong>Important Note:</strong> Even if you only use the free tier, it is highly recommended to link a billing account to your Google Cloud project. Otherwise, your free usage may be blocked or heavily restricted over time.
                 </p>
             </div>
             <div style="margin-bottom: 15px;">
-                <label for="settings-ai-prompt" style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 6px;">KI-Summary Prompt (Artikel):</label>
-                <textarea id="settings-ai-prompt" rows="3" placeholder="Standard-Prompt..." style="width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--input-color); border-radius: 6px; box-sizing: border-box; font-size: 12px; outline: none; resize: vertical; font-family: inherit;"></textarea>
+                <label for="settings-ai-prompt" style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 6px;">AI Summary Prompt (Articles):</label>
+                <textarea id="settings-ai-prompt" rows="3" placeholder="Default prompt..." style="width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--input-color); border-radius: 6px; box-sizing: border-box; font-size: 12px; outline: none; resize: vertical; font-family: inherit;"></textarea>
             </div>
             <div style="margin-bottom: 20px;">
-                <label for="settings-yt-prompt" style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 6px;">KI-Summary Prompt (YouTube Videos):</label>
-                <textarea id="settings-yt-prompt" rows="3" placeholder="Standard-Prompt..." style="width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--input-color); border-radius: 6px; box-sizing: border-box; font-size: 12px; outline: none; resize: vertical; font-family: inherit;"></textarea>
+                <label for="settings-yt-prompt" style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 6px;">AI Summary Prompt (YouTube Videos):</label>
+                <textarea id="settings-yt-prompt" rows="3" placeholder="Default prompt..." style="width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--input-color); border-radius: 6px; box-sizing: border-box; font-size: 12px; outline: none; resize: vertical; font-family: inherit;"></textarea>
             </div>
             
             <!-- Rules Engine Section -->
             <div style="margin-bottom: 20px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                <label style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 10px; font-weight: bold;">Regeln für Artikel-Filterung (Rules Engine):</label>
+                <label style="display: block; font-size: 13px; color: var(--text-color-darker); margin-bottom: 10px; font-weight: bold;">Article Filtering Rules (Rules Engine):</label>
                 <div id="settings-rules-list" style="margin-bottom: 15px; font-size: 12px;"></div>
                 
                 <div style="background: var(--input-bg); padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px;">
-                    <div style="font-weight: bold; margin-bottom: 8px;">Neue Regel hinzufügen:</div>
+                    <div style="font-weight: bold; margin-bottom: 8px;">Add New Rule:</div>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
                         <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                            <span>WENN Feld</span>
+                            <span>IF field</span>
                             <select id="new-rule-field" style="padding: 4px; font-size: 12px; background: var(--body-bg); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; outline: none; cursor: pointer;">
-                                <option value="title">Titel</option>
-                                <option value="author">Autor</option>
-                                <option value="desc">Beschreibung/Inhalt</option>
+                                <option value="title">Title</option>
+                                <option value="author">Author</option>
+                                <option value="desc">Description/Content</option>
                             </select>
                             <select id="new-rule-condition" style="padding: 4px; font-size: 12px; background: var(--body-bg); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; outline: none; cursor: pointer;">
-                                <option value="contains">enthält</option>
-                                <option value="not-contains">enthält nicht</option>
-                                <option value="equals">ist gleich</option>
+                                <option value="contains">contains</option>
+                                <option value="not-contains">does not contain</option>
+                                <option value="equals">equals</option>
                             </select>
                         </div>
                         <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-                            <input type="text" id="new-rule-value" placeholder="Schlüsselwort (+ AND, , OR, - NOT)" title="Beispiel: Apple +Macbook -iPhone" style="flex: 1; padding: 6px; font-size: 12px; background: var(--body-bg); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; outline: none;">
+                            <input type="text" id="new-rule-value" placeholder="Keyword (+ AND, , OR, - NOT)" title="Example: Apple +Macbook -iPhone" style="flex: 1; padding: 6px; font-size: 12px; background: var(--body-bg); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; outline: none;">
                         </div>
                         <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: space-between;">
                             <div>
-                                <span>DANN</span>
+                                <span>THEN</span>
                                 <select id="new-rule-action" style="padding: 4px; font-size: 12px; background: var(--body-bg); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; outline: none; cursor: pointer;">
-                                    <option value="notify">Markieren / Treffer</option>
-                                    <option value="markAsRead">Als gelesen markieren</option>
-                                    <option value="hide">Artikel ausblenden</option>
+                                    <option value="notify">Mark / Match</option>
+                                    <option value="markAsRead">Mark as read</option>
+                                    <option value="hide">Hide article</option>
                                 </select>
                             </div>
-                            <button type="button" id="new-rule-add-btn" style="padding: 6px 12px; background: #ff9800; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 11px; width: auto; margin: 0;">Regel hinzufügen</button>
+                            <button type="button" id="new-rule-add-btn" style="padding: 6px 12px; background: #ff9800; border: none; color: white; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 11px; width: auto; margin: 0;">Add Rule</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-
-            <button id="settings-save-btn" style="width: 100%; padding: 12px; background: #ff9800; border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px;">Speichern</button>
+            <button id="settings-save-btn" style="width: 100%; padding: 12px; background: #ff9800; border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 14px;">Save</button>
         </div>
     </div>
 
