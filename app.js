@@ -519,6 +519,12 @@ async function loadApp(user) {
             }
             if (data.rules !== undefined && data.rules !== null) {
                 localStorage.setItem('web_rules', JSON.stringify(data.rules));
+            } else {
+                const localRules = getWebRules();
+                if (localRules && localRules.length > 0) {
+                    console.log("Sync: Migrating local WebApp rules to cloud...");
+                    updateCloudSettings({ rules: localRules }).catch(e => console.error(e));
+                }
             }
         }
         
