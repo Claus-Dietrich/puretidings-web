@@ -2192,6 +2192,13 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 </div>
                 <span id="web-copy-status" class="status-message-inline"></span>
             </div>
+            <!-- Bulk Summary Prompt Editor Section -->
+            <div id="web-ai-prompt-editor-section" style="margin: 10px 15px; padding: 12px; background: #1e1e1e; border: 1px solid var(--border-color, #333); border-radius: 6px;">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label for="web-ai-custom-prompt-val" style="font-size: 12px; font-weight: bold; color: var(--text-color-darker, #aaa);">Prompt für diese Sammel-Zusammenfassung anpassen:</label>
+                    <textarea id="web-ai-custom-prompt-val" rows="2" style="width: 100%; padding: 8px; background: #252525; color: #e8eaed; border: 1px solid #3c4043; border-radius: 6px; font-family: inherit; font-size: 12px; resize: vertical; outline: none; box-sizing: border-box;"></textarea>
+                </div>
+            </div>
             <div id="summary-ai-output" style="display:none; padding:15px 15px 0 15px;"></div>
         `;
         
@@ -2250,6 +2257,14 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             clearListBtn.onclick = clearCurrentList;
         }
         document.getElementById('web-ai-report').onclick = generateAiSummary;
+        
+        const webAiCustomPromptVal = document.getElementById('web-ai-custom-prompt-val');
+        if (webAiCustomPromptVal) {
+            const customAiPrompt = localStorage.getItem('gemini_ai_prompt') || '';
+            webAiCustomPromptVal.value = customAiPrompt && customAiPrompt.trim() !== ''
+                ? customAiPrompt.trim()
+                : "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use German language for the summary:";
+        }
         
         const fullViewBtn = document.getElementById('web-full-view-summary');
         if (fullViewBtn) {
@@ -2713,7 +2728,10 @@ async function generateAiSummary() {
     outputContainer.style.display = 'block';
     
     try {
-        let promptText = "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use German language for the summary:\n\n";
+        const webAiCustomPromptVal = document.getElementById('web-ai-custom-prompt-val');
+        let promptText = webAiCustomPromptVal && webAiCustomPromptVal.value.trim() !== ''
+            ? webAiCustomPromptVal.value.trim() + "\n\n"
+            : "Create a coherent, well-structured summary report in Markdown format based on the following articles. Group related topics if applicable, and highlight the most important takeaways. Use German language for the summary:\n\n";
         
         postsToSummarize.forEach((post, index) => {
             promptText += `### Article ${index + 1}: ${post.title}\n`;
@@ -3082,6 +3100,18 @@ async function openReader(post) {
                    <button id="reader-close-ai-report-btn" class="secondary-btn" style="background:#2a2a2a; border:1px solid #3d3d3d; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; cursor:pointer; font-weight:bold; margin-left: 10px;">Close</button>
                </div>
            </div>
+           
+           <!-- Prompt Editor Section -->
+           <div id="reader-ai-prompt-editor-section" style="margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 12px;">
+               <div style="display: flex; flex-direction: column; gap: 8px;">
+                   <label for="reader-ai-custom-prompt-val" style="font-size: 12px; font-weight: bold; color: var(--text-color-darker, #aaa);">Prompt für diese Zusammenfassung anpassen:</label>
+                   <div style="display: flex; gap: 10px; align-items: flex-end;">
+                       <textarea id="reader-ai-custom-prompt-val" rows="2" style="flex: 1; padding: 8px; background: #252525; color: #e8eaed; border: 1px solid #3c4043; border-radius: 6px; font-family: inherit; font-size: 12px; resize: vertical; outline: none;"></textarea>
+                       <button id="reader-ai-generate-with-prompt-btn" style="height: 32px; padding: 0 15px; font-weight: bold; background: #3c5c8b; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Generieren 🤖</button>
+                   </div>
+               </div>
+           </div>
+
            <div id="reader-ai-report-content" class="ai-report-body" style="line-height: 1.6; font-size: 14px; white-space: pre-wrap; color: #eee;"></div>
         </div>
 
@@ -3182,7 +3212,10 @@ async function openReader(post) {
     const aiReportContainer = body.querySelector('#reader-ai-report-container');
     const aiReportContent = body.querySelector('#reader-ai-report-content');
     
-    aiSummaryBtn.onclick = async () => {
+    const aiCustomPromptVal = body.querySelector('#reader-ai-custom-prompt-val');
+    const aiGenerateWithPromptBtn = body.querySelector('#reader-ai-generate-with-prompt-btn');
+
+    async function runAiSummaryGeneration() {
         const geminiApiKey = localStorage.getItem('gemini_api_key') || '';
         if (!geminiApiKey || geminiApiKey.trim() === '') {
             alert("Bitte hinterlege zuerst deinen Google Gemini API Key in den Einstellungen (Zahnrad-Symbol oben rechts).");
@@ -3191,6 +3224,8 @@ async function openReader(post) {
 
         aiSummaryBtn.innerText = 'Wird geladen...';
         aiSummaryBtn.disabled = true;
+        aiGenerateWithPromptBtn.innerText = 'Wird geladen...';
+        aiGenerateWithPromptBtn.disabled = true;
         aiReportContainer.classList.remove('hidden');
         aiReportContent.innerHTML = '<p><em>Beitrag wird analysiert... bitte warten.</em></p>';
 
@@ -3198,13 +3233,12 @@ async function openReader(post) {
             let promptText = "";
             let contentText = "";
 
-            const customAiPrompt = localStorage.getItem('gemini_ai_prompt') || '';
-            const customYtPrompt = localStorage.getItem('gemini_yt_prompt') || '';
+            const customPrompt = aiCustomPromptVal.value.trim();
 
             if (isYouTube) {
                 aiReportContent.innerHTML = '<p><em>Hole Video-Skript (Transkript) und analysiere Video... bitte warten.</em></p>';
-                if (customYtPrompt && customYtPrompt.trim() !== '') {
-                    promptText = customYtPrompt.trim() + "\n\n";
+                if (customPrompt && customPrompt !== '') {
+                    promptText = customPrompt + "\n\n";
                 } else {
                     promptText = "You are an assistant that summarizes YouTube videos. Generate a response in German that is clearly divided into two distinct sections using these exact Markdown headings:\n\n";
                     promptText += "### 📝 Zusammenfassung aus der Videobeschreibung\n[Provide a concise summary of the video's description text here]\n\n";
@@ -3231,8 +3265,8 @@ async function openReader(post) {
                     contentText += `(Note: Video transcript is not available because: ${failMsg}. Summarizing based on description only. Please write under the video script header the exact reason: "${failMsg}")\n\n`;
                 }
             } else {
-                if (customAiPrompt && customAiPrompt.trim() !== '') {
-                    promptText = customAiPrompt.trim() + "\n\n";
+                if (customPrompt && customPrompt !== '') {
+                    promptText = customPrompt + "\n\n";
                 } else {
                     promptText = "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.\n\n";
                 }
@@ -3318,7 +3352,32 @@ async function openReader(post) {
         } finally {
             aiSummaryBtn.innerText = 'AI Summary';
             aiSummaryBtn.disabled = false;
+            aiGenerateWithPromptBtn.innerText = 'Generieren 🤖';
+            aiGenerateWithPromptBtn.disabled = false;
         }
+    }
+
+    aiSummaryBtn.onclick = async () => {
+        aiReportContainer.classList.remove('hidden');
+        
+        const customAiPrompt = localStorage.getItem('gemini_ai_prompt') || '';
+        const customYtPrompt = localStorage.getItem('gemini_yt_prompt') || '';
+
+        if (isYouTube) {
+            aiCustomPromptVal.value = customYtPrompt && customYtPrompt.trim() !== ''
+                ? customYtPrompt.trim()
+                : "You are an assistant that summarizes YouTube videos. Generate a response in German that is clearly divided into two distinct sections using these exact Markdown headings:\n\n### 📝 Zusammenfassung aus der Videobeschreibung\n[Provide a concise summary of the video's description text here]\n\n### 🎥 Zusammenfassung aus dem Video-Skript\n[Provide a concise summary and 3-5 key takeaways in bullet points based on the transcript (script) of the video here]\n\nIf both description and transcript are provided, you MUST show both sections. If the transcript is not available, still display both headers but under the script header write: 'Kein Video-Skript (Transkript) verfügbar. Zusammenfassung basiert nur auf der Beschreibung.' Ignore advertisements or sponsor mentions in the text.";
+        } else {
+            aiCustomPromptVal.value = customAiPrompt && customAiPrompt.trim() !== ''
+                ? customAiPrompt.trim()
+                : "Provide a concise summary and highlight the key takeaways of the following article in Markdown format. Use German language for the summary.";
+        }
+
+        await runAiSummaryGeneration();
+    };
+
+    aiGenerateWithPromptBtn.onclick = async () => {
+        await runAiSummaryGeneration();
     };
 
     const innerContent = body.querySelector('#reader-inner-content');
