@@ -3363,6 +3363,8 @@ async function openReader(post) {
         base.href = post.link;
         doc.head.appendChild(base);
 
+        preprocessDOM(doc, post.link);
+
         const reader = new Readability(doc).parse();
         if (reader && reader.content) {
             let content = reader.content;
@@ -3419,6 +3421,8 @@ async function loadFullInlineContent(link, btn) {
         base.href = link;
         doc.head.appendChild(base);
 
+        preprocessDOM(doc, link);
+
         const reader = new Readability(doc).parse();
         if (reader && reader.content) {
             let content = sanitizeReaderContent(reader.content);
@@ -3467,6 +3471,8 @@ async function loadFullInlineContentDirect(post, row) {
         const base = doc.createElement('base');
         base.href = post.link;
         doc.head.appendChild(base);
+
+        preprocessDOM(doc, post.link);
 
         const reader = new Readability(doc).parse();
         if (reader && reader.content) {
@@ -3609,3 +3615,127 @@ window.onload = () => {
     init();
     setupResizer();
 };
+
+function preprocessDOM(doc, url) {
+    if (!url) return;
+
+    // Preprocessing: Fix specific sites where Readability fails (like investing.com risk disclaimer)
+    if (url.includes('investing.com')) {
+        const investingArticle = doc.querySelector('div[class*="article_WYSIWYG"], .articlePage');
+        if (investingArticle) {
+            investingArticle.querySelectorAll('[data-test="ad-slot-visible"], .ad_ad__II8vw').forEach(ad => ad.remove());
+            doc.body.innerHTML = '';
+            doc.body.appendChild(investingArticle);
+        }
+    }
+
+    // Preprocessing: Ensure Readability doesn't strip out specific YouTube containers (like wp-youtube-lyte)
+    doc.querySelectorAll('div[id^="lyte_"]').forEach(lyteDiv => {
+        const videoId = lyteDiv.id.replace('lyte_', '');
+        if (videoId) {
+            const iframe = doc.createElement('iframe');
+            iframe.src = `https://www.youtube.com/embed/${videoId}?origin=${encodeURIComponent(window.location.origin)}`;
+            iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen');
+            const wrapper = lyteDiv.closest('.lyte-wrapper') || lyteDiv;
+            wrapper.replaceWith(iframe);
+        }
+    });
+
+    // Preprocessing: Fix Chefkoch.de recipes
+    if (url.includes('chefkoch.de')) {
+        // 1. Remove slide navigation and carousel elements
+        doc.querySelectorAll('nav').forEach(nav => {
+            if (nav.textContent.includes('Slide 1')) {
+                nav.remove();
+            }
+        });
+        doc.querySelectorAll('.recipe-images__slides, .ds-carousel-item, [class*="slider__control"], .ds-carousel').forEach(el => el.remove());
+        
+        // Remove empty recipe author headers, breadcrumbs, ads, and widgets
+        doc.querySelectorAll('section, div, h2').forEach(el => {
+            if (el.textContent.trim() === 'Rezeptautor:in' || el.textContent.trim() === 'Klassische Rezepte der Woche') {
+                el.remove();
+            }
+        });
+        doc.querySelectorAll('[data-testid="rds-breadcrumb"], nav[aria-label="Breadcrumb"], spark-ad, spark-config').forEach(el => el.remove());
+
+        // 2. Restructure nutrition grid into a clean horizontal table
+        const nutritionCells = doc.querySelectorAll('.ds-nutrition__cell, [class*="nutrition__cell"]');
+        if (nutritionCells.length > 0) {
+            const data = [];
+            nutritionCells.forEach(cell => {
+                const valueEl = cell.querySelector('.ds-nutrition__value, [class*="nutrition__value"]');
+                const labelEl = cell.querySelector('.ds-nutrition__title, [class*="nutrition__title"]');
+                if (valueEl && labelEl) {
+                    data.push({
+                        label: labelEl.textContent.trim(),
+                        value: valueEl.textContent.trim()
+                    });
+                } else {
+                    const paragraphs = cell.querySelectorAll('p');
+                    if (paragraphs.length >= 2) {
+                        let val = '';
+                        let lbl = '';
+                        paragraphs.forEach(p => {
+                            const txt = p.textContent.trim();
+                            if (txt.includes('kcal') || txt.includes(' g') || txt === '--') {
+                                val = txt;
+                            } else if (txt && !p.querySelector('i') && !txt.match(/^[]$/)) {
+                                lbl = txt;
+                            }
+                        });
+                        if (val && lbl) {
+                            data.push({ label: lbl, value: val });
+                        }
+                    }
+                }
+            });
+
+            if (data.length > 0) {
+                const table = doc.createElement('table');
+                table.className = 'reader-nutrition-table';
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+                table.style.marginTop = '15px';
+                table.style.marginBottom = '15px';
+                table.style.border = '1px solid var(--border-color, #ddd)';
+                
+                const trHead = doc.createElement('tr');
+                const trBody = doc.createElement('tr');
+                
+                data.forEach(item => {
+                    const th = doc.createElement('th');
+                    th.textContent = item.label;
+                    th.style.border = '1px solid var(--border-color, #ddd)';
+                    th.style.padding = '8px';
+                    th.style.backgroundColor = 'var(--bg-color-secondary, #f0f0f0)';
+                    th.style.color = 'var(--text-color, #333)';
+                    th.style.textAlign = 'center';
+                    th.style.fontWeight = 'bold';
+                    trHead.appendChild(th);
+                    
+                    const td = doc.createElement('td');
+                    td.textContent = item.value;
+                    td.style.border = '1px solid var(--border-color, #ddd)';
+                    td.style.padding = '8px';
+                    td.style.textAlign = 'center';
+                    td.style.color = 'var(--text-color, #333)';
+                    trBody.appendChild(td);
+                });
+                
+                table.appendChild(trHead);
+                table.appendChild(trBody);
+
+                const container = doc.querySelector('.recipe-nutrition, [class*="nutrition-card"]');
+                if (container) {
+                    container.replaceWith(table);
+                } else {
+                    const cellParent = nutritionCells[0].parentElement;
+                    if (cellParent) {
+                        cellParent.replaceWith(table);
+                    }
+                }
+            }
+        }
+    }
+}
