@@ -2552,21 +2552,68 @@ async function generateAiSummary() {
         
         outputContainer.innerHTML = `
             <div style="background:#1e1e1e; border:1px solid #333; border-radius:8px; padding:20px; margin-bottom:20px; line-height:1.6; position:relative;">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; padding-bottom:10px; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
                     <strong style="color:#ff9800; font-size:16px;">🤖 KI-Zusammenfassung (Gemini)</strong>
-                    <button class="action-btn" id="copy-report-text" style="width:auto; padding:3px 10px; font-size:11px; height:auto;" title="Kopieren">Kopieren 📋</button>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <select id="bulk-export-ai-format" title="Export Format" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #444; background: #252525; color: white; font-size:12px;">
+                            <option value="markdown">Markdown</option>
+                            <option value="txt">TXT</option>
+                            <option value="html">HTML</option>
+                        </select>
+                        <button class="action-btn" id="bulk-copy-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Kopieren">Kopieren 📋</button>
+                        <button class="action-btn" id="bulk-download-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Speichern">Speichern 💾</button>
+                        <button class="action-btn" id="bulk-close-ai-report-btn" style="width:auto; padding:5px 12px; font-size:12px; height:auto;" title="Schließen">Schließen ✖</button>
+                    </div>
                 </div>
-                <div id="ai-report-body" style="color:#eee; font-size:14px; overflow-y:auto; max-height:400px; text-align:left;">${htmlContent}</div>
+                <div id="ai-report-body" class="ai-report-body" style="color:#eee; font-size:14px; overflow-y:auto; max-height:400px; text-align:left;">${htmlContent}</div>
             </div>
         `;
         
-        document.getElementById('copy-report-text').onclick = async () => {
+        document.getElementById('bulk-close-ai-report-btn').onclick = () => {
+            outputContainer.style.display = 'none';
+        };
+
+        document.getElementById('bulk-copy-ai-report-btn').onclick = async () => {
+            const aiFormat = document.getElementById('bulk-export-ai-format').value;
+            let exportText = markdownReport;
+            if (aiFormat === 'html') {
+                exportText = window.marked ? window.marked.parse(markdownReport) : markdownReport;
+            } else if (aiFormat === 'txt') {
+                exportText = markdownReport.replace(/[*#_`-]/g, '');
+            }
             try {
-                await navigator.clipboard.writeText(markdownReport);
+                await navigator.clipboard.writeText(exportText);
                 alert("Zusammenfassungsbericht in die Zwischenablage kopiert!");
             } catch(err) {
                 console.error("Kopieren fehlgeschlagen:", err);
             }
+        };
+
+        document.getElementById('bulk-download-ai-report-btn').onclick = () => {
+            const aiFormat = document.getElementById('bulk-export-ai-format').value;
+            let exportText = markdownReport;
+            let extension = 'md';
+            let mimeType = 'text/markdown';
+            if (aiFormat === 'html') {
+                exportText = window.marked ? window.marked.parse(markdownReport) : markdownReport;
+                extension = 'html';
+                mimeType = 'text/html';
+            } else if (aiFormat === 'txt') {
+                exportText = markdownReport.replace(/[*#_`-]/g, '');
+                extension = 'txt';
+                mimeType = 'text/plain';
+            }
+            const date = new Date();
+            const datePart = date.toISOString().split('T')[0];
+            const timePart = date.toTimeString().split(' ')[0].replace(/:/g, '-');
+            const fileName = `puretidings-ai-summary-${datePart}_${timePart}.${extension}`;
+            const blob = new Blob([exportText], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
         };
         
     } catch(e) {
