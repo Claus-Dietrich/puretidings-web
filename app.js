@@ -1916,12 +1916,9 @@ function createPostRowElement(post, isToolbarView) {
             <!-- Inline full report view -->
             <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
                 <hr style="border:0; border-top:1px solid #333; margin-bottom:15px;">
-                <div class="report-content-body">${desc || ''}</div>
-                ${(!post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) ? `
-                    <div style="margin-top: 12px; text-align: left;">
-                        <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px;">Vollständigen Text nachladen 👓</button>
-                    </div>
-                ` : ''}
+                <div class="report-content-body">
+                    ${(!post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) ? '<em>Lade vollständigen Artikel...</em>' : (desc || '')}
+                </div>
             </div>
 
             <div class="post-meta">
@@ -1954,6 +1951,12 @@ function createPostRowElement(post, isToolbarView) {
         e.preventDefault(); e.stopPropagation();
         markAsUnread(link, row);
     };
+
+    if (isToolbarView && summarySubMode === 'report' && !post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) {
+        setTimeout(() => {
+            loadFullInlineContent(link, null);
+        }, 50);
+    }
 
     return row;
 }
@@ -3190,12 +3193,22 @@ async function openReader(post) {
 }
 
 async function loadFullInlineContent(link, btn) {
-    const container = btn.closest('.report-inline-description');
+    let container = null;
+    if (btn) {
+        container = btn.closest('.report-inline-description');
+    } else {
+        const postRow = document.querySelector(`.post-row[data-link="${link}"]`);
+        if (postRow) {
+            container = postRow.querySelector('.report-inline-description');
+        }
+    }
     const contentBody = container ? container.querySelector('.report-content-body') : null;
     if (!container || !contentBody) return;
     
-    btn.innerText = 'Lade...';
-    btn.disabled = true;
+    if (btn) {
+        btn.innerText = 'Lade...';
+        btn.disabled = true;
+    }
     
     try {
         const { data: { session } } = await db.auth.getSession();
@@ -3216,16 +3229,11 @@ async function loadFullInlineContent(link, btn) {
         doc.head.appendChild(base);
 
         const reader = new Readability(doc).parse();
+        const post = allPosts.find(p => p.link === link);
         if (reader && reader.content) {
             let content = sanitizeReaderContent(reader.content);
             contentBody.innerHTML = content;
             
-            // Remove the reload button div since the content is now fully loaded
-            const parentOfBtn = btn.parentNode;
-            if (parentOfBtn) parentOfBtn.remove();
-
-            // Also update the description in local memory cache
-            const post = allPosts.find(p => p.link === link);
             if (post) {
                 post.desc = content;
                 post.isFullyLoaded = true;
@@ -3235,9 +3243,16 @@ async function loadFullInlineContent(link, btn) {
         }
     } catch(e) {
         console.error(e);
-        btn.innerText = 'Vollständigen Text nachladen ↻';
-        btn.disabled = false;
-        alert("Der vollständige Artikel konnte nicht geladen werden: " + e.message);
+        const post = allPosts.find(p => p.link === link);
+        const originalDesc = post ? (post.desc || '') : '';
+        contentBody.innerHTML = `
+            <div style="color:#ff4444; font-size:13px; margin-bottom:10px;">
+                <strong>Automatische Text-Extraktion fehlgeschlagen:</strong> ${e.message}
+            </div>
+            <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; margin-bottom:10px;">Erneut versuchen ↻</button>
+            <br>
+            ${originalDesc}
+        `;
     }
 }
 window.loadFullInlineContent = loadFullInlineContent;
