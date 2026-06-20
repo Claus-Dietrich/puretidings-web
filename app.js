@@ -1945,7 +1945,7 @@ function createPostRowElement(post, isToolbarView) {
     };
     row.querySelector('.reader-btn').onclick = (e) => {
         e.preventDefault(); e.stopPropagation();
-        openReader({title, link, desc, thumbnail});
+        openReader(post);
     };
     row.querySelector('.unread-btn').onclick = (e) => {
         e.preventDefault(); e.stopPropagation();
@@ -1953,9 +1953,7 @@ function createPostRowElement(post, isToolbarView) {
     };
 
     if (isToolbarView && summarySubMode === 'report' && !post.isFullyLoaded && !link.includes('youtube.com') && !link.includes('youtu.be')) {
-        setTimeout(() => {
-            loadFullInlineContent(link, null);
-        }, 50);
+        loadFullInlineContentDirect(post, row);
     }
 
     return row;
@@ -3254,6 +3252,56 @@ async function loadFullInlineContent(link, btn) {
     }
 }
 window.loadFullInlineContent = loadFullInlineContent;
+
+async function loadFullInlineContentDirect(post, row) {
+    const contentBody = row.querySelector('.report-content-body');
+    if (!contentBody) return;
+    
+    try {
+        const { data: { session } } = await db.auth.getSession();
+        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
+            method: 'POST', 
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`
+            }, 
+            body: JSON.stringify({ url: post.link }) 
+        });
+        if (!res.ok) throw new Error("HTTP-Fehler " + res.status);
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        
+        const base = doc.createElement('base');
+        base.href = post.link;
+        doc.head.appendChild(base);
+
+        const reader = new Readability(doc).parse();
+        if (reader && reader.content) {
+            let content = sanitizeReaderContent(reader.content);
+            contentBody.innerHTML = content;
+            
+            post.desc = content;
+            post.isFullyLoaded = true;
+            if (row.postData) {
+                row.postData.desc = content;
+                row.postData.isFullyLoaded = true;
+            }
+        } else {
+            throw new Error("Text-Extraktion fehlgeschlagen.");
+        }
+    } catch(e) {
+        console.error("Hintergrund-Laden fehlgeschlagen für:", post.link, e);
+        contentBody.innerHTML = `
+            <div style="color:#ff4444; font-size:13px; margin-bottom:10px;">
+                <strong>Automatische Text-Extraktion fehlgeschlagen:</strong> ${e.message}
+            </div>
+            <button class="action-btn load-full-btn" onclick="loadFullInlineContent('${post.link}', this)" style="font-size:11px; padding:4px 8px; width:auto; height:auto; background: #2a2a2a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; margin-bottom:10px;">Erneut versuchen ↻</button>
+            <br>
+            ${post.desc || ''}
+        `;
+    }
+}
+window.loadFullInlineContentDirect = loadFullInlineContentDirect;
 
 function generateReaderArticleContent(post, format, isFragment = false) {
     const title = post.title;
