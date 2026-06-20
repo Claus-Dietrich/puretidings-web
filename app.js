@@ -1255,7 +1255,7 @@ async function getFeedPosts(url, feedName = '') {
               if (dcNodes.length > 0) pubDate = dcNodes[0].textContent;
             }
             
-            let thumbnail = '';
+            let thumbnail = url.includes('mail.google.com') ? 'gmail.png' : '';
             const ytId = item.querySelector('yt\\:videoId, videoId')?.textContent || '';
             let durationStr = '';
             
