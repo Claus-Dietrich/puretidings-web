@@ -3193,14 +3193,14 @@ async function openReader(post) {
 }
 
 async function loadFullInlineContent(link, btn) {
+    const postRow = document.querySelector(`.post-row[data-link="${link}"]`);
+    const post = postRow ? postRow.postData : null;
+    
     let container = null;
     if (btn) {
         container = btn.closest('.report-inline-description');
-    } else {
-        const postRow = document.querySelector(`.post-row[data-link="${link}"]`);
-        if (postRow) {
-            container = postRow.querySelector('.report-inline-description');
-        }
+    } else if (postRow) {
+        container = postRow.querySelector('.report-inline-description');
     }
     const contentBody = container ? container.querySelector('.report-content-body') : null;
     if (!container || !contentBody) return;
@@ -3229,7 +3229,6 @@ async function loadFullInlineContent(link, btn) {
         doc.head.appendChild(base);
 
         const reader = new Readability(doc).parse();
-        const post = allPosts.find(p => p.link === link);
         if (reader && reader.content) {
             let content = sanitizeReaderContent(reader.content);
             contentBody.innerHTML = content;
@@ -3243,7 +3242,6 @@ async function loadFullInlineContent(link, btn) {
         }
     } catch(e) {
         console.error(e);
-        const post = allPosts.find(p => p.link === link);
         const originalDesc = post ? (post.desc || '') : '';
         contentBody.innerHTML = `
             <div style="color:#ff4444; font-size:13px; margin-bottom:10px;">
