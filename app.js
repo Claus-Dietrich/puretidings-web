@@ -1195,16 +1195,7 @@ async function getFeedPosts(url, feedName = '') {
         return globalPostsCache[url];
     }
     try {
-        const { data: { session } } = await db.auth.getSession();
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token}`
-            }, 
-            body: JSON.stringify({ url }) 
-        });
-        const xmlStr = await res.text();
+        const xmlStr = await fetchViaExtensionOrProxy(url);
         const xml = parseFeedXML(xmlStr);
         if (!xml) return [];
 
@@ -1324,18 +1315,8 @@ async function getFeedPosts(url, feedName = '') {
                 if (!thumbnail && link && link !== '#') {
                     try {
                         console.log(`[Web-App] Try fetch page for og:image via proxy: ${link}`);
-                        const { data: { session } } = await db.auth.getSession();
-                        const response = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${session?.access_token}`
-                            },
-                            body: JSON.stringify({ url: link })
-                        });
-                        if (response.ok) {
-                            const html = await response.text();
-                            console.log(`[Web-App] Successfully loaded article HTML, length: ${html.length}`);
+                        const html = await fetchViaExtensionOrProxy(link);
+                        console.log(`[Web-App] Successfully loaded article HTML, length: ${html.length}`);
                             const docParser = new DOMParser();
                             const docHtml = docParser.parseFromString(html, "text/html");
                             const ogNode = docHtml.querySelector('meta[property="og:image"], meta[name="og:image"], meta[property="twitter:image"], meta[name="twitter:image"], link[rel="image_src"]');
@@ -1618,17 +1599,7 @@ async function calculateAllUnreadCounts() {
 
     for (const feed of feeds) {
         try {
-            const { data: { session } } = await db.auth.getSession();
-            const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
-                method: 'POST', 
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
-                }, 
-                body: JSON.stringify({ url: feed.url }) 
-            });
-            if (!res.ok) continue;
-            const xmlStr = await res.text();
+            const xmlStr = await fetchViaExtensionOrProxy(feed.url);
             const xml = parseFeedXML(xmlStr);
             if (!xml) continue;
 
@@ -3077,6 +3048,56 @@ async function getYouTubeTranscript(url) {
     }
 }
 
+async function tryExtensionFetch(url) {
+    const extensionId = 'faeeldkkipajnnbkajhdanhbhilfifah';
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        try {
+            const extResponse = await new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error("Timeout bei Verbindung zur Extension")), 3000);
+                chrome.runtime.sendMessage(extensionId, { action: "proxyFetch", url: url }, (res) => {
+                    clearTimeout(timer);
+                    if (chrome.runtime.lastError) {
+                        reject(new Error(chrome.runtime.lastError.message));
+                    } else {
+                        resolve(res);
+                    }
+                });
+            });
+            if (extResponse && extResponse.status === 'ok') {
+                return extResponse.text;
+            } else if (extResponse && extResponse.status === 'error') {
+                throw new Error(extResponse.message || "Fehler beim Abrufen über Extension");
+            }
+        } catch (err) {
+            console.log("Extension nicht erreichbar oder Fehler bei proxyFetch. Details:", err.message);
+        }
+    }
+    return null;
+}
+
+async function fetchViaExtensionOrProxy(url) {
+    // 1. Try Extension first
+    const extHtml = await tryExtensionFetch(url);
+    if (extHtml !== null) {
+        console.log(`[Proxy] Successfully fetched url via Extension: ${url}`);
+        return extHtml;
+    }
+
+    // 2. Fallback to Supabase Proxy
+    console.log(`[Proxy] Extension fetch failed or unavailable, falling back to Supabase Proxy for: ${url}`);
+    const { data: { session } } = await db.auth.getSession();
+    const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
+        method: 'POST', 
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+        }, 
+        body: JSON.stringify({ url }) 
+    });
+    if (!res.ok) throw new Error("HTTP-Fehler " + res.status);
+    return await res.text();
+}
+
 async function openReader(post) {
     const overlay = document.getElementById('reader-overlay');
     const body = document.getElementById('reader-body');
@@ -3423,16 +3444,7 @@ async function openReader(post) {
     }
 
     try {
-        const { data: { session } } = await db.auth.getSession();
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token}`
-            }, 
-            body: JSON.stringify({ url: post.link }) 
-        });
-        const html = await res.text();
+        const html = await fetchViaExtensionOrProxy(post.link);
         const doc = new DOMParser().parseFromString(html, "text/html");
         
         const base = doc.createElement('base');
@@ -3480,17 +3492,7 @@ async function loadFullInlineContent(link, btn) {
     }
     
     try {
-        const { data: { session } } = await db.auth.getSession();
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token}`
-            }, 
-            body: JSON.stringify({ url: link }) 
-        });
-        if (!res.ok) throw new Error("HTTP-Fehler " + res.status);
-        const html = await res.text();
+        const html = await fetchViaExtensionOrProxy(link);
         const doc = new DOMParser().parseFromString(html, "text/html");
         
         const base = doc.createElement('base');
@@ -3531,17 +3533,7 @@ async function loadFullInlineContentDirect(post, row) {
     if (!contentBody) return;
     
     try {
-        const { data: { session } } = await db.auth.getSession();
-        const res = await fetch('https://lujvogyndoryofuffntr.supabase.co/functions/v1/fetch-feed', { 
-            method: 'POST', 
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token}`
-            }, 
-            body: JSON.stringify({ url: post.link }) 
-        });
-        if (!res.ok) throw new Error("HTTP-Fehler " + res.status);
-        const html = await res.text();
+        const html = await fetchViaExtensionOrProxy(post.link);
         const doc = new DOMParser().parseFromString(html, "text/html");
         
         const base = doc.createElement('base');
