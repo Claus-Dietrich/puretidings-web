@@ -2023,6 +2023,26 @@ async function loadFeedPosts(url, feedName = '') {
     }
 }
 
+async function refreshFeedContent(url = null) {
+    const container = document.getElementById('posts-container');
+    if (container) {
+        container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><div>Refreshing feed data...</div></div>`;
+    }
+    
+    if (url) {
+        console.log(`[WebApp Refresh] Refreshing single feed: ${url}`);
+        delete globalPostsCache[url];
+        await loadFeedPosts(url, currentFeedName);
+    } else {
+        console.log('[WebApp Refresh] Refreshing all feeds');
+        for (const key in globalPostsCache) {
+            delete globalPostsCache[key];
+        }
+        await showView(currentViewMode);
+    }
+    calculateAllUnreadCounts();
+}
+
 function createPostRowElement(post, isToolbarView) {
     const { title, link, desc, thumbnail, pubDate, durationStr, feedName } = post;
     console.log(`[Web Rendering] Creating row for "${title}", thumbnail: ${thumbnail || 'none'}`);
@@ -2106,6 +2126,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
             <div class="feed-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>${headerTitle}</span>
                 <div style="display:flex; gap:10px;">
+                    <button class="action-btn" title="${feedUrl ? 'Refresh this feed' : 'Refresh all feeds'}" onclick="refreshFeedContent('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Refresh 🔄</button>
                     <button class="action-btn" title="Mark all displayed articles as read" onclick="markFeedAsRead('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Mark all read ✔</button>
                     <button class="action-btn" title="Mark all displayed articles as unread" onclick="markFeedAsUnread('${feedUrl || ''}')" style="font-size:12px; width:auto; padding:2px 8px; height:24px;">Mark all unread ↩</button>
                 </div>
