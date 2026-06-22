@@ -2047,10 +2047,7 @@ function createPostRowElement(post, isToolbarView) {
                 ${title}
             </a>
             
-            <!-- Legacy 300 char snippet for summary cart in list mode -->
-            <div class="summary-item-description" style="display: ${(currentViewMode === 'summary' && summarySubMode === 'list') ? 'block' : 'none'}; font-size: 13px; color: #aaa; margin: 8px 0; line-height: 1.4;">
-                ${desc ? desc.replace(/<[^>]+>/g, ' ').substring(0, 300) + '...' : ''}
-            </div>
+
 
             <!-- Inline full report view -->
             <div class="report-inline-description" style="display: ${(isToolbarView && summarySubMode === 'report') ? 'block' : 'none'}; margin-top: 15px; font-size: 1.1em; line-height: 1.6; color: #eee;">
@@ -2261,10 +2258,7 @@ function renderPostsList(posts, headerTitle, feedUrl = null) {
                 document.querySelectorAll('.report-inline-description').forEach(el => {
                     el.style.display = (summarySubMode === 'report') ? 'block' : 'none';
                 });
-                
-                document.querySelectorAll('.summary-item-description').forEach(el => {
-                    el.style.display = (summarySubMode === 'list') ? 'block' : 'none';
-                });
+
 
                 if (summarySubMode === 'report') {
                     document.querySelectorAll('.post-row').forEach(row => {
