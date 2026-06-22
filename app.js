@@ -3676,12 +3676,12 @@ function sanitizeReaderContent(html) {
             const container = document.createElement('div');
             container.style.margin = '20px 0';
             container.style.position = 'relative';
-            container.style.cursor = 'pointer';
             container.innerHTML = `
-                <img src="https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;" onerror="this.src='https://i.ytimg.com/vi/${ytId}/mqdefault.jpg'">
-                <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:30px; border:2px solid white;">▶</div>
+                <a href="https://www.youtube.com/watch?v=${ytId}" target="_blank" rel="noopener noreferrer" style="display:block; position:relative; cursor:pointer;">
+                    <img src="https://i.ytimg.com/vi/${ytId}/hqdefault.jpg" style="width:100%; border-radius:8px; border:1px solid #333;">
+                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.7); width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-size:30px; border:2px solid white;">▶</div>
+                </a>
             `;
-            container.onclick = () => window.open(`https://www.youtube.com/watch?v=${ytId}`, '_blank');
             ifr.replaceWith(container);
         }
     });
